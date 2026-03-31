@@ -4,7 +4,6 @@
 
 import { View, Input, Text } from '@tarojs/components'
 import type { FC } from 'react'
-import Taro from '@tarojs/taro'
 import { Send } from 'lucide-react-taro'
 import { Button } from '@/components/ui/button'
 
@@ -23,14 +22,6 @@ export const ChatInput: FC<ChatInputProps> = ({
   loading,
   onCancel,
 }) => {
-  // 计算底部安全高度（TabBar + 安全区域）
-  const systemInfo = Taro.getSystemInfoSync()
-  const tabBarHeight = 50
-  const safeAreaBottom = systemInfo.safeArea?.bottom || systemInfo.windowHeight
-  const screenHeight = systemInfo.screenHeight
-  const safeBottom = screenHeight - safeAreaBottom
-  const bottomSafeHeight = tabBarHeight + safeBottom
-
   return (
     <View
       style={{
@@ -38,17 +29,13 @@ export const ChatInput: FC<ChatInputProps> = ({
         bottom: 0,
         left: 0,
         right: 0,
-        width: '100%',
-        maxWidth: '100vw',
         display: 'flex',
         flexDirection: 'row',
         gap: '8px',
         padding: '12px 16px',
-        paddingBottom: `${bottomSafeHeight}px`,
         backgroundColor: '#fff',
         borderTop: '1px solid #e5e7eb',
-        zIndex: 100,
-        boxSizing: 'border-box'
+        zIndex: 100
       }}
     >
       <View style={{ flex: 1, backgroundColor: '#f5f5f5', borderRadius: '20px', padding: '8px 12px' }}>
