@@ -402,17 +402,38 @@ const Index: FC = () => {
     }
   }, [updatedTask, scrollToBottom])
 
-  // 处理取消确认 - 直接关闭弹窗（不执行任何操作）
+  // 处理取消确认 - 直接关闭弹窗（不执行任何操作），并在对话框显示提示
   const handleCancelConfirm = useCallback(() => {
     console.log('[取消] 用户取消操作')
+    
+    // 根据操作类型生成取消消息
+    let cancelMessage = '操作已取消'
+    if (confirmType === 'batch_add' && pendingTasks.length > 0) {
+      cancelMessage = `已取消添加 ${pendingTasks.length} 个日程`
+    } else if (confirmType === 'batch_delete' && pendingDeleteTasks.length > 0) {
+      cancelMessage = `已取消删除 ${pendingDeleteTasks.length} 个日程`
+    } else if (confirmType === 'modify') {
+      cancelMessage = '已取消修改日程'
+    }
+    
+    // 在对话框添加取消消息
+    setMessages(prev => [...prev, {
+      id: Date.now().toString(),
+      role: 'assistant',
+      content: `❌ ${cancelMessage}`,
+      timestamp: new Date(),
+    }])
+    
+    // 重置状态
     setShowConfirmModal(false)
     setPendingTasks([])
     setPendingDeleteTasks([])
     setPendingDeleteIds([])
     setOriginalTask(null)
     setUpdatedTask(null)
-    Taro.showToast({ title: '已取消', icon: 'none' })
-  }, [])
+    
+    scrollToBottom()
+  }, [confirmType, pendingTasks.length, pendingDeleteTasks.length, scrollToBottom])
 
   // =============================================
   // 发送消息 - 使用流式客户端

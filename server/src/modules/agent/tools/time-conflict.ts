@@ -83,9 +83,10 @@ export async function checkTimeConflict(
   const newStart = scheduledTime.getTime()
   const newEnd = newStart + duration * 60 * 1000
 
+  // 使用本地时区（+08:00）进行日期查询
   const dateStr = scheduledTime.toISOString().split('T')[0]
-  const startOfDay = new Date(`${dateStr}T00:00:00`).toISOString()
-  const endOfDay = new Date(`${dateStr}T23:59:59`).toISOString()
+  const startOfDay = `${dateStr}T00:00:00+08:00`
+  const endOfDay = `${dateStr}T23:59:59+08:00`
 
   const { data: tasks, error } = await supabase
     .from('tasks')

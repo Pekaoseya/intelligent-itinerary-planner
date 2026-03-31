@@ -265,7 +265,7 @@ export const ConfirmModal: FC<ConfirmModalProps> = ({
 
   return (
     <View
-      className="fixed inset-0 z-50"
+      className="fixed inset-0"
       style={{
         position: 'fixed',
         top: 0,
@@ -275,7 +275,8 @@ export const ConfirmModal: FC<ConfirmModalProps> = ({
         width: '100vw',
         maxWidth: '100vw',
         backgroundColor: 'rgba(0,0,0,0.5)',
-        overflowX: 'hidden'
+        overflowX: 'hidden',
+        zIndex: 200  // 高于输入框的 z-index: 100
       }}
     >
       <View

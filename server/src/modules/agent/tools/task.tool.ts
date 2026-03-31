@@ -286,9 +286,11 @@ export async function executeTaskDelete(args: any, userId: string): Promise<Tool
     } else {
       if (filter.type) query = query.eq('type', filter.type)
       if (filter.date_range?.start && filter.date_range?.end) {
-        query = query.gte('scheduled_time', `${filter.date_range.start}T00:00:00Z`).lte('scheduled_time', `${filter.date_range.end}T23:59:59Z`)
+        // 使用本地时区（+08:00）进行日期范围查询
+        query = query.gte('scheduled_time', `${filter.date_range.start}T00:00:00+08:00`).lte('scheduled_time', `${filter.date_range.end}T23:59:59+08:00`)
       } else if (filter.date) {
-        query = query.gte('scheduled_time', `${filter.date}T00:00:00Z`).lte('scheduled_time', `${filter.date}T23:59:59Z`)
+        // 使用本地时区（+08:00）进行日期查询
+        query = query.gte('scheduled_time', `${filter.date}T00:00:00+08:00`).lte('scheduled_time', `${filter.date}T23:59:59+08:00`)
       }
       if (filter.status) query = query.eq('status', filter.status)
       if (filter.keyword) query = query.or(`title.ilike.%${filter.keyword}%,location_name.ilike.%${filter.keyword}%`)
@@ -371,11 +373,13 @@ export async function executeTaskQuery(args: any, userId: string): Promise<ToolR
 
   if (filter) {
     if (filter.date) {
-      query = query.gte('scheduled_time', `${filter.date}T00:00:00Z`).lte('scheduled_time', `${filter.date}T23:59:59Z`)
+      // 使用本地时区（+08:00）进行日期查询
+      query = query.gte('scheduled_time', `${filter.date}T00:00:00+08:00`).lte('scheduled_time', `${filter.date}T23:59:59+08:00`)
     }
     if (filter.date_range) {
-      if (filter.date_range.start) query = query.gte('scheduled_time', filter.date_range.start)
-      if (filter.date_range.end) query = query.lte('scheduled_time', filter.date_range.end)
+      // 使用本地时区（+08:00）进行日期范围查询
+      if (filter.date_range.start) query = query.gte('scheduled_time', `${filter.date_range.start}T00:00:00+08:00`)
+      if (filter.date_range.end) query = query.lte('scheduled_time', `${filter.date_range.end}T23:59:59+08:00`)
     }
     if (filter.type) query = query.eq('type', filter.type)
     if (filter.status) query = query.eq('status', filter.status)
