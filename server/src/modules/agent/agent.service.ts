@@ -253,8 +253,17 @@ export class AgentService {
     // Step 5: 执行工具调用
     // =============================================
     if (parsedResponse.toolCalls && parsedResponse.toolCalls.length > 0) {
-      for (const toolCall of parsedResponse.toolCalls) {
-        reasoning.push(`准备执行: ${toolCall.name}`)
+      // 去重：避免 AI 返回重复的工具调用
+      const uniqueToolCalls = parsedResponse.toolCalls.filter((tc, index, self) => 
+        index === self.findIndex(t => t.name === tc.name && JSON.stringify(t.arguments) === JSON.stringify(tc.arguments))
+      )
+      
+      for (const toolCall of uniqueToolCalls) {
+        // 避免重复添加 reasoning
+        const reasoningStep = `准备执行: ${toolCall.name}`
+        if (!reasoning.includes(reasoningStep)) {
+          reasoning.push(reasoningStep)
+        }
         onProgress({ type: 'reasoning', data: { step: `正在${this.getToolDisplayName(toolCall.name)}...` } })
         
         const result = await executeTool(toolCall.name, toolCall.arguments, userId, userLocation)
@@ -491,25 +500,36 @@ ${TOOL_NAMES.map(t => `- ${t.name}: ${t.description}`).join('\n')}
     content?: string
   } {
     try {
-      // 尝试提取 JSON
+      // 尝试提取 JSON 代码块
       const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/)
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[1])
-        return {
-          reasoning: parsed.reasoning,
-          toolCalls: parsed.tool_calls,
-          content: parsed.content,
-        }
+        return this.normalizeParsedResponse(parsed)
       }
 
-      // 尝试直接解析 JSON
-      const directMatch = content.match(/\{[\s\S]*\}/)
-      if (directMatch) {
-        const parsed = JSON.parse(directMatch[0])
-        return {
-          reasoning: parsed.reasoning,
-          toolCalls: parsed.tool_calls,
-          content: parsed.content,
+      // 尝试直接解析 JSON - 使用更健壮的方法
+      const jsonStart = content.indexOf('{')
+      const jsonEnd = content.lastIndexOf('}')
+      if (jsonStart !== -1 && jsonEnd > jsonStart) {
+        const jsonStr = content.substring(jsonStart, jsonEnd + 1)
+        try {
+          const parsed = JSON.parse(jsonStr)
+          return this.normalizeParsedResponse(parsed)
+        } catch (parseError) {
+          // 如果解析失败，尝试逐步缩小范围
+          this.logger.warn('JSON 解析失败，尝试逐步缩小范围')
+          for (let end = jsonEnd; end > jsonStart; end--) {
+            if (content[end] === '}') {
+              const subStr = content.substring(jsonStart, end + 1)
+              try {
+                const parsed = JSON.parse(subStr)
+                return this.normalizeParsedResponse(parsed)
+              } catch {
+                continue
+              }
+            }
+          }
+          throw parseError
         }
       }
     } catch (e) {
@@ -518,6 +538,30 @@ ${TOOL_NAMES.map(t => `- ${t.name}: ${t.description}`).join('\n')}
 
     // 无法解析为 JSON，作为普通文本返回
     return { content }
+  }
+
+  /**
+   * 标准化解析后的响应
+   * 将 AI 返回的 parameters 字段映射到 arguments 字段
+   * 为每个工具调用生成唯一的 id
+   */
+  private normalizeParsedResponse(parsed: any): {
+    reasoning?: string
+    toolCalls?: ToolCall[]
+    content?: string
+  } {
+    const toolCalls: ToolCall[] = (parsed.tool_calls || []).map((tc: any, index: number) => ({
+      id: tc.id || `tool_${Date.now()}_${index}`,
+      name: tc.name,
+      // AI 可能返回 parameters 或 arguments，统一映射到 arguments
+      arguments: tc.arguments || tc.parameters || {},
+    }))
+
+    return {
+      reasoning: parsed.reasoning,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      content: parsed.content,
+    }
   }
 
   /**

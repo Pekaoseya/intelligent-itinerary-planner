@@ -37,10 +37,24 @@ export async function executeTaskCreate(
   userId: string,
   userLocation?: UserLocation
 ): Promise<ToolResult> {
-  const { title, type, scheduled_time, end_time, location_name, location_address, destination_name, destination_address, metadata } = args
+  // 参数别名映射（兼容 AI 返回的不同参数名）
+  const normalizedArgs = {
+    ...args,
+    // title 的别名
+    title: args.title || args.description || args.name || args.subject,
+    // scheduled_time 的别名
+    scheduled_time: args.scheduled_time || args.time || args.start_time || args.datetime,
+    // location_name 的别名
+    location_name: args.location_name || args.location || args.place,
+    // destination_name 的别名
+    destination_name: args.destination_name || args.destination || args.end_location || args.to,
+  }
+
+  const { title, type, scheduled_time, end_time, location_name, location_address, destination_name, destination_address, metadata } = normalizedArgs
 
   // 参数校验
   if (!title || !type || !scheduled_time) {
+    console.log('[executeTaskCreate] 参数校验失败:', { title, type, scheduled_time, originalArgs: args })
     return {
       success: false,
       error: '缺少必要参数：title, type, scheduled_time',

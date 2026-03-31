@@ -141,20 +141,31 @@ export function useAI(options: UseAIOptions): UseAIResult {
             handleConfirmation(responseData)
           }
           
-          const toolResults = data.tool_results?.map((tr: any) => ({
-            tool: tr.tool,
-            args: tr.args || {},
-            result: {
-              success: tr.result?.success ?? true,
-              message: tr.result?.message,
-              error: tr.result?.error,
-            },
-          })) || []
+          // 获取当前消息状态
+          const currentMessages = useChatStore.getState().messages
+          const msg = currentMessages.find(m => m.id === aiMessageId)
+          
+          // 使用后端返回的数据，但如果为空则保留流式过程中收集的数据
+          const finalReasoning = (data.reasoning && data.reasoning.length > 0) 
+            ? data.reasoning 
+            : (msg?.reasoning || [])
+          
+          const finalToolResults = (data.tool_results && data.tool_results.length > 0)
+            ? data.tool_results.map((tr: any) => ({
+                tool: tr.tool,
+                args: tr.args || {},
+                result: {
+                  success: tr.result?.success ?? true,
+                  message: tr.result?.message,
+                  error: tr.result?.error,
+                },
+              }))
+            : (msg?.tool_results || [])
           
           updateMessage(aiMessageId, {
             content: data.content || '',
-            reasoning: data.reasoning || [],
-            tool_results: toolResults,
+            reasoning: finalReasoning,
+            tool_results: finalToolResults,
             data: data.data as any,
           })
           
