@@ -34,6 +34,7 @@ export interface ConfirmResult {
 export interface ConfirmProps {
   task: PendingTask
   originalTask?: PendingTask    // 原任务（修改时使用）
+  createdCount?: number          // 批量创建的任务数量
   onConfirm: (task: PendingTask) => void
   onCancel: () => void
 }

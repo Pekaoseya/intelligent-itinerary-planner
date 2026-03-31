@@ -789,6 +789,8 @@ ${TOOL_NAMES.map(t => `- ${t.name}: ${t.description}`).join('\n')}
    */
   private extractDataFromResults(results: AgentResponse['tool_results']): any {
     const data: any = {}
+    const createdTaskIds: string[] = []
+    let lastCreatedTask: any = null
 
     for (const r of results) {
       if (r.result.success && r.result.data) {
@@ -796,22 +798,12 @@ ${TOOL_NAMES.map(t => `- ${t.name}: ${t.description}`).join('\n')}
         if (r.tool === 'task_query') {
           data.tasks = r.result.data.tasks
         } else if (r.tool === 'task_create') {
-          // 任务创建成功，返回确认信息
+          // 收集所有创建的任务
           const task = r.result.data
-          data.needConfirmation = true
-          data.confirmType = 'add'
-          data.pendingTask = {
-            id: task.id,
-            title: task.title,
-            type: task.type,
-            scheduled_time: task.scheduled_time,
-            end_time: task.end_time,
-            location_name: task.location_name,
-            destination_name: task.destination_name,
-            metadata: task.metadata,
-            status: task.status,
+          if (task.id) {
+            createdTaskIds.push(task.id)
           }
-          data.task = task
+          lastCreatedTask = task
         } else if (r.tool === 'task_update') {
           // 任务更新成功，返回确认信息
           const task = r.result.data
@@ -851,6 +843,31 @@ ${TOOL_NAMES.map(t => `- ${t.name}: ${t.description}`).join('\n')}
             data.deletedCount = r.result.data.count
           }
         }
+      }
+    }
+
+    // 如果有创建的任务，返回确认信息
+    if (createdTaskIds.length > 0 && lastCreatedTask) {
+      data.needConfirmation = true
+      data.confirmType = 'add'
+      data.pendingTask = {
+        id: lastCreatedTask.id,
+        title: lastCreatedTask.title,
+        type: lastCreatedTask.type,
+        scheduled_time: lastCreatedTask.scheduled_time,
+        end_time: lastCreatedTask.end_time,
+        location_name: lastCreatedTask.location_name,
+        destination_name: lastCreatedTask.destination_name,
+        metadata: lastCreatedTask.metadata,
+        status: lastCreatedTask.status,
+      }
+      // 收集所有创建的任务 ID，用于取消时批量删除
+      data.createdTaskIds = createdTaskIds
+      data.task = lastCreatedTask
+      
+      // 如果创建了多个任务，在消息中提示
+      if (createdTaskIds.length > 1) {
+        data.createdCount = createdTaskIds.length
       }
     }
 

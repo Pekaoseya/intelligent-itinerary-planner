@@ -13,6 +13,7 @@ import type { ConfirmProps, PendingTask } from './types'
 
 export const ConfirmAdd: FC<ConfirmProps> = ({
   task,
+  createdCount,
   onConfirm,
   onCancel,
 }) => {
@@ -31,6 +32,11 @@ export const ConfirmAdd: FC<ConfirmProps> = ({
     onConfirm(editedTask)
   }
 
+  // 显示创建的任务数量
+  const countText = createdCount && createdCount > 1 
+    ? `AI 已为您生成 ${createdCount} 个行程，点击取消可撤销全部` 
+    : 'AI 已为您生成以下行程，请确认或调整后提交'
+
   return (
     <View className="w-full">
       {/* 标题栏 */}
@@ -39,7 +45,9 @@ export const ConfirmAdd: FC<ConfirmProps> = ({
           <View className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
             <Plus size={18} color="#fff" />
           </View>
-          <Text className="text-lg font-bold">新增日程确认</Text>
+          <Text className="text-lg font-bold">
+            {createdCount && createdCount > 1 ? `新增日程确认 (${createdCount}个)` : '新增日程确认'}
+          </Text>
         </View>
         <Button size="sm" variant="ghost" className="p-1" onClick={onCancel}>
           <X size={24} color="#999" />
@@ -49,7 +57,7 @@ export const ConfirmAdd: FC<ConfirmProps> = ({
       {/* 内容区域 */}
       <ScrollView scrollY className="px-4 py-4" style={{ maxHeight: '60vh' }}>
         <View className="mb-4">
-          <Text className="text-sm text-gray-400">AI 已为您生成以下行程，请确认或调整后提交</Text>
+          <Text className="text-sm text-gray-400">{countText}</Text>
         </View>
 
         <TaskEditor
@@ -67,7 +75,7 @@ export const ConfirmAdd: FC<ConfirmProps> = ({
           className="flex-1"
           onClick={onCancel}
         >
-          <Text className="text-gray-600">取消</Text>
+          <Text className="text-gray-600">{createdCount && createdCount > 1 ? '取消全部' : '取消'}</Text>
         </Button>
         <Button
           className="flex-1 bg-green-500"

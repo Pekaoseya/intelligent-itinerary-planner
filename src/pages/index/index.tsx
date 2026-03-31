@@ -59,7 +59,10 @@ interface MessageData {
   needConfirmation?: boolean
   confirmType?: ConfirmType
   pendingTask?: PendingTask
-  originalTask?: Task
+  originalTask?: PendingTask
+  // 批量创建的任务 ID，用于取消时批量删除
+  createdTaskIds?: string[]
+  createdCount?: number
 }
 
 interface Message {
@@ -99,6 +102,9 @@ const Index: FC = () => {
   const [originalTask, setOriginalTask] = useState<PendingTask | null>(null)
   const [confirmType, setConfirmType] = useState<ConfirmType>('add')
   const [showConfirmModal, setShowConfirmModal] = useState(false)
+  // 批量创建的任务 ID，用于取消时批量删除
+  const [createdTaskIds, setCreatedTaskIds] = useState<string[]>([])
+  const [createdCount, setCreatedCount] = useState<number>(0)
   
   // 保存当前流式连接，用于取消
   const connectionRef = useRef<StreamConnection | null>(null)
@@ -329,7 +335,7 @@ const Index: FC = () => {
 
   // 处理取消确认（撤销操作）
   const handleCancelConfirm = useCallback(async () => {
-    if (!pendingTask) {
+    if (!pendingTask && createdTaskIds.length === 0) {
       setShowConfirmModal(false)
       return
     }
@@ -338,18 +344,34 @@ const Index: FC = () => {
       setIsLoading(true)
       
       if (confirmType === 'add') {
-        // 撤销新增：删除已创建的任务
-        await Network.request({
-          url: `/api/tasks/${pendingTask.id}`,
-          method: 'DELETE'
-        })
-        Taro.showToast({ title: '已取消', icon: 'none' })
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: `❌ 已取消添加日程`,
-          timestamp: new Date(),
-        }])
+        // 撤销新增：批量删除所有创建的任务
+        const idsToDelete = createdTaskIds.length > 0 ? createdTaskIds : (pendingTask?.id ? [pendingTask.id] : [])
+        
+        if (idsToDelete.length > 0) {
+          console.log('[取消] 删除任务 IDs:', idsToDelete)
+          
+          // 并行删除所有任务
+          await Promise.all(idsToDelete.map(id => 
+            Network.request({
+              url: `/api/tasks/${id}`,
+              method: 'DELETE'
+            }).catch(err => console.error('[取消] 删除失败:', id, err))
+          ))
+          
+          const cancelMsg = idsToDelete.length > 1 
+            ? `❌ 已取消添加 ${idsToDelete.length} 个日程` 
+            : `❌ 已取消添加日程`
+          
+          Taro.showToast({ title: '已取消', icon: 'none' })
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: cancelMsg,
+            timestamp: new Date(),
+          }])
+        } else {
+          Taro.showToast({ title: '已取消', icon: 'none' })
+        }
       } else if (confirmType === 'modify') {
         // 撤销修改：恢复原任务（简化处理，只显示取消）
         Taro.showToast({ title: '已取消', icon: 'none' })
@@ -361,6 +383,8 @@ const Index: FC = () => {
       setShowConfirmModal(false)
       setPendingTask(null)
       setOriginalTask(null)
+      setCreatedTaskIds([])
+      setCreatedCount(0)
       scrollToBottom()
     } catch (error) {
       console.error('[取消] 操作失败:', error)
@@ -369,7 +393,7 @@ const Index: FC = () => {
     } finally {
       setIsLoading(false)
     }
-  }, [confirmType, pendingTask, scrollToBottom])
+  }, [confirmType, pendingTask, createdTaskIds, scrollToBottom])
 
   // =============================================
   // 发送消息 - 使用流式客户端
@@ -495,6 +519,12 @@ const Index: FC = () => {
             setConfirmType(responseData.confirmType || 'add')
             if (responseData.originalTask) {
               setOriginalTask(responseData.originalTask as PendingTask)
+            }
+            // 保存创建的任务 ID，用于取消时批量删除
+            if (responseData.createdTaskIds && responseData.createdTaskIds.length > 0) {
+              console.log('[主页面] 创建的任务 IDs:', responseData.createdTaskIds)
+              setCreatedTaskIds(responseData.createdTaskIds)
+              setCreatedCount(responseData.createdCount || responseData.createdTaskIds.length)
             }
             setShowConfirmModal(true)
           }
@@ -937,6 +967,7 @@ const Index: FC = () => {
           task={pendingTask}
           originalTask={originalTask ?? undefined}
           visible={showConfirmModal}
+          createdCount={createdCount}
           onConfirm={handleConfirmTask}
           onCancel={handleCancelConfirm}
         />

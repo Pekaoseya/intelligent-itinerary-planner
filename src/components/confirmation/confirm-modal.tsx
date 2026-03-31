@@ -15,6 +15,7 @@ export interface ConfirmModalProps {
   task: PendingTask
   originalTask?: PendingTask    // 修改时的原任务
   visible: boolean
+  createdCount?: number          // 批量创建的任务数量
   onConfirm: (task: PendingTask) => void
   onCancel: () => void
 }
@@ -24,6 +25,7 @@ export const ConfirmModal: FC<ConfirmModalProps> = ({
   task,
   originalTask,
   visible,
+  createdCount,
   onConfirm,
   onCancel,
 }) => {
@@ -36,6 +38,7 @@ export const ConfirmModal: FC<ConfirmModalProps> = ({
         return (
           <ConfirmAdd
             task={task}
+            createdCount={createdCount}
             onConfirm={onConfirm}
             onCancel={onCancel}
           />
