@@ -101,7 +101,7 @@ const ProfilePage: FC = () => {
       <ScrollView
         scrollY
         className="w-full"
-        style={{ height: `${scrollViewHeight}px`, width: '100%', maxWidth: '100vw', overflowX: 'hidden', paddingBottom: '80px' }}
+        style={{ height: `${scrollViewHeight}px`, width: '100%', maxWidth: '100vw', overflowX: 'hidden' }}
       >
         <View className="w-full px-4 py-4 box-border">
           {loading ? (

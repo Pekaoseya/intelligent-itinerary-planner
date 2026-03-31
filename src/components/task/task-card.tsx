@@ -34,12 +34,27 @@ export const TaskCard: FC<TaskCardProps> = ({ task, onViewDetail }) => {
   return (
     <Card
       className={`rounded-xl overflow-hidden ${isCompleted ? 'opacity-60' : ''} ${task.is_expired ? 'border-red-200' : ''}`}
-      style={{ maxWidth: '100vw' }}
+      style={{ 
+        width: '100%',
+        maxWidth: '100vw',
+        overflow: 'hidden'
+      }}
     >
-      <CardContent className="p-0" style={{ maxWidth: '100%' }}>
-        <View className="flex items-start p-3" style={{ maxWidth: '100%' }}>
+      <CardContent className="p-0" style={{ width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
+        <View 
+          className="flex items-start p-3" 
+          style={{ 
+            width: '100%',
+            maxWidth: '100%',
+            minWidth: 0,
+            overflow: 'hidden'
+          }}
+        >
           {/* 时间和图标 */}
-          <View className="flex flex-col items-center mr-3" style={{ width: '50px', flexShrink: 0 }}>
+          <View 
+            className="flex flex-col items-center mr-3" 
+            style={{ width: '50px', flexShrink: 0 }}
+          >
             <Text className="text-sm font-medium text-gray-700">{formatTime(task.scheduled_time)}</Text>
             <View
               className="w-10 h-10 rounded-full flex items-center justify-center mt-2"
@@ -50,19 +65,30 @@ export const TaskCard: FC<TaskCardProps> = ({ task, onViewDetail }) => {
           </View>
 
           {/* 内容 */}
-          <View className="flex-1" style={{ minWidth: 0, maxWidth: '100%' }}>
-            <View className="flex items-center gap-2 mb-1" style={{ flexWrap: 'wrap' }}>
+          <View 
+            className="flex-1" 
+            style={{ 
+              minWidth: 0,
+              maxWidth: 'calc(100% - 120px)',
+              overflow: 'hidden'
+            }}
+          >
+            <View className="flex items-center gap-2 mb-1 flex-wrap" style={{ maxWidth: '100%' }}>
               <Text
                 className={`text-base font-medium ${isCompleted ? 'text-gray-400 line-through' : 'text-gray-700'}`}
-                style={{ wordBreak: 'break-all' }}
+                style={{ 
+                  wordBreak: 'break-all',
+                  maxWidth: '100%',
+                  overflow: 'hidden'
+                }}
               >
                 {task.title}
               </Text>
-              <View className="px-2 py-1 rounded" style={{ backgroundColor: `${typeColor}15` }}>
+              <View className="px-2 py-1 rounded flex-shrink-0" style={{ backgroundColor: `${typeColor}15` }}>
                 <Text className="text-xs" style={{ color: typeColor }}>{getTaskTypeName(task.type)}</Text>
               </View>
               {task.is_expired && (
-                <View className="px-2 py-1 rounded bg-red-100">
+                <View className="px-2 py-1 rounded bg-red-100 flex-shrink-0">
                   <Text className="text-xs text-red-500">已过期</Text>
                 </View>
               )}
@@ -70,14 +96,27 @@ export const TaskCard: FC<TaskCardProps> = ({ task, onViewDetail }) => {
 
             {/* 地点信息 */}
             {task.destination_name && (
-              <Text className="text-xs text-gray-500 mb-1" style={{ wordBreak: 'break-all' }}>
+              <Text 
+                className="text-xs text-gray-500 mb-1" 
+                style={{ 
+                  wordBreak: 'break-all',
+                  maxWidth: '100%',
+                  overflow: 'hidden'
+                }}
+              >
                 {task.destination_name}
               </Text>
             )}
             {task.location_name && (
-              <View className="flex items-center gap-1">
-                <MapPin size={12} color="#999" />
-                <Text className="text-xs text-gray-400" style={{ wordBreak: 'break-all' }}>
+              <View className="flex items-center gap-1" style={{ maxWidth: '100%', minWidth: 0 }}>
+                <MapPin size={12} color="#999" style={{ flexShrink: 0 }} />
+                <Text 
+                  className="text-xs text-gray-400" 
+                  style={{ 
+                    wordBreak: 'break-all',
+                    overflow: 'hidden'
+                  }}
+                >
                   {task.location_name}
                 </Text>
               </View>

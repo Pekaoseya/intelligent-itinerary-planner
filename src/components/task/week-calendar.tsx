@@ -126,6 +126,7 @@ export const WeekCalendar: FC<WeekCalendarProps> = ({
     <View
       key={idx}
       className="flex-1 flex flex-col items-center justify-center py-1"
+      style={{ minWidth: 0 }}
       onClick={() => onDateSelect(day.date)}
     >
       <View
@@ -154,11 +155,17 @@ export const WeekCalendar: FC<WeekCalendarProps> = ({
   )
 
   return (
-    <View className="w-full px-2 py-2">
+    <View 
+      className="w-full px-2 py-2"
+      style={{ 
+        maxWidth: '100vw',
+        overflowX: 'hidden'
+      }}
+    >
       {/* 周几标签 */}
-      <View className="flex items-center mb-2">
+      <View className="flex items-center mb-2" style={{ width: '100%', minWidth: 0 }}>
         {WEEK_LABELS.map((label, idx) => (
-          <View key={idx} className="flex-1 text-center">
+          <View key={idx} className="flex-1 text-center" style={{ minWidth: 0 }}>
             <Text className={`text-xs ${idx === 0 || idx === 6 ? 'text-red-400' : 'text-gray-400'}`}>
               {label}
             </Text>
@@ -170,21 +177,27 @@ export const WeekCalendar: FC<WeekCalendarProps> = ({
       {isWeapp ? (
         <Swiper
           className="w-full"
-          style={{ height: '56px' }}
+          style={{ height: '56px', maxWidth: '100vw', overflowX: 'hidden' }}
           current={1}
           onChange={handleSwiperChange}
           duration={200}
         >
           {swiperWeeks.map((week) => (
             <SwiperItem key={week.key}>
-              <View className="flex items-center w-full">
+              <View 
+                className="flex items-center w-full"
+                style={{ maxWidth: '100vw', overflowX: 'hidden' }}
+              >
                 {week.days.map((day, idx) => renderDay(day, idx))}
               </View>
             </SwiperItem>
           ))}
         </Swiper>
       ) : (
-        <View className="flex items-center w-full">
+        <View 
+          className="flex items-center w-full"
+          style={{ maxWidth: '100vw', overflowX: 'hidden' }}
+        >
           {currentWeekDays.map((day, idx) => renderDay(day, idx))}
         </View>
       )}
