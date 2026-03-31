@@ -102,6 +102,7 @@ const Index: FC = () => {
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
   const [locationLoading, setLocationLoading] = useState(true)
   const [locationError, setLocationError] = useState<string | null>(null)
+  const [showLocationDetail, setShowLocationDetail] = useState(false)
   
   // ========== 新增：确认弹窗状态 ==========
   const [confirmType, setConfirmType] = useState<'batch_add' | 'batch_delete' | 'modify'>('batch_add')
@@ -276,6 +277,50 @@ const Index: FC = () => {
   useEffect(() => {
     fetchLocation()
   }, [fetchLocation])
+
+  // =============================================
+  // 简化地址显示（只保留街道和大厦）
+  // =============================================
+  const simplifyAddress = useCallback((address: string): string => {
+    if (!address) return ''
+    
+    // 提取关键信息：街道名 + 大厦/建筑名
+    // 例如："浙江省杭州市西湖区翠苑街道九莲新村九莲新村西区" -> "翠苑街道九莲新村"
+    // 例如："浙江省杭州市西湖区西溪街道文三路197号创业大厦(文三路)" -> "文三路创业大厦"
+    
+    // 先尝试提取路名和建筑名
+    const roadMatch = address.match(/([^\s]+路\d*号?)/)
+    const buildingMatch = address.match(/([\u4e00-\u9fa5]+大厦|[\u4e00-\u9fa5]+大楼|[\u4e00-\u9fa5]+中心|[\u4e00-\u9fa5]+广场|[\u4e00-\u9fa5]+小区|[\u4e00-\u9fa5]+村)/)
+    const streetMatch = address.match(/([\u4e00-\u9fa5]+街道)/)
+    
+    const parts: string[] = []
+    
+    if (roadMatch) {
+      // 有路名，提取路名（去掉门牌号）
+      parts.push(roadMatch[1].replace(/\d+号?/, '').trim())
+    }
+    
+    if (buildingMatch) {
+      parts.push(buildingMatch[1])
+    } else if (streetMatch && !roadMatch) {
+      // 没有路名但有街道
+      parts.push(streetMatch[1])
+    }
+    
+    // 如果都没匹配到，取最后两个有意义的词
+    if (parts.length === 0) {
+      const segments = address.split(/[省市县区]/)
+      const lastPart = segments[segments.length - 1] || address
+      // 限制长度
+      if (lastPart.length > 10) {
+        return lastPart.substring(0, 10) + '...'
+      }
+      return lastPart
+    }
+    
+    const result = parts.join('')
+    return result.length > 12 ? result.substring(0, 12) + '...' : result
+  }, [])
 
   // =============================================
   // 清理 JSON 代码块
@@ -934,28 +979,84 @@ const Index: FC = () => {
       {/* 定位栏 */}
       <View
         className="flex items-center justify-center py-2 px-4 bg-white border-b border-gray-100"
-        onClick={locationLoading ? undefined : fetchLocation}
         style={{ minHeight: '36px' }}
       >
         {locationLoading ? (
           <View className="flex items-center gap-1">
-            <Loader size={12} color="#1890ff" className="animate-spin" />
+            <Loader size={16} color="#1890ff" className="animate-spin" />
             <Text className="text-xs text-gray-500">获取定位中...</Text>
           </View>
         ) : locationError ? (
-          <View className="flex items-center gap-1">
-            <MapPin size={12} color="#ff4d4f" />
+          <View className="flex items-center gap-1" onClick={locationLoading ? undefined : fetchLocation}>
+            <MapPin size={16} color="#ff4d4f" />
             <Text className="text-xs text-red-500">{locationError}</Text>
-            <Locate size={12} color="#1890ff" style={{ marginLeft: '4px' }} />
+            <Locate size={14} color="#1890ff" style={{ marginLeft: '4px' }} />
           </View>
         ) : (
-          <View className="flex items-center gap-1">
-            <MapPin size={12} color="#1890ff" />
-            <Text className="text-xs text-gray-600">{userLocation?.name || '未知位置'}</Text>
-            <Text className="text-xs text-gray-400 ml-1">点击刷新</Text>
+          <View className="flex items-center gap-1" style={{ maxWidth: '100%' }}>
+            <View 
+              style={{ flexShrink: 0, display: 'flex', alignItems: 'center', padding: '2px' }}
+              onClick={() => setShowLocationDetail(true)}
+            >
+              <MapPin size={16} color="#1890ff" />
+            </View>
+            <Text className="text-xs text-gray-600 truncate" style={{ maxWidth: '200px' }}>
+              {simplifyAddress(userLocation?.name || '')}
+            </Text>
+            <Text 
+              className="text-xs text-gray-400 ml-1" 
+              style={{ flexShrink: 0 }}
+              onClick={fetchLocation}
+            >
+              刷新
+            </Text>
           </View>
         )}
       </View>
+
+      {/* 详细地址弹窗 */}
+      {showLocationDetail && userLocation?.name && (
+        <View
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            zIndex: 150,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onClick={() => setShowLocationDetail(false)}
+        >
+          <View
+            style={{
+              backgroundColor: '#fff',
+              borderRadius: '12px',
+              padding: '16px 20px',
+              margin: '20px',
+              maxWidth: '80%'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <View className="flex items-center gap-2 mb-2">
+              <MapPin size={18} color="#1890ff" />
+              <Text className="text-sm font-medium">当前位置</Text>
+            </View>
+            <Text className="text-sm text-gray-600 leading-relaxed">{userLocation.name}</Text>
+            <View className="flex justify-end mt-3">
+              <Button 
+                size="sm" 
+                onClick={() => setShowLocationDetail(false)}
+              >
+                <Text className="text-sm">关闭</Text>
+              </Button>
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* 消息列表 */}
       <ScrollView
