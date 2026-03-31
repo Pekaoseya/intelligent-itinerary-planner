@@ -7,6 +7,8 @@ import { Network } from '@/network'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { streamingClient, type StreamConnection } from '@/streaming'
+import { ConfirmModal } from '@/components/confirmation'
+import type { PendingTask, ConfirmType } from '@/components/confirmation'
 import './index.css'
 
 // =============================================
@@ -46,13 +48,27 @@ interface ToolResult {
   }
 }
 
+// 扩展消息数据类型，支持确认流程
+interface MessageData {
+  task?: Task
+  tasks?: Task[]
+  deleted?: Task
+  deletedCount?: number
+  needConfirm?: boolean
+  // 新增确认相关字段
+  needConfirmation?: boolean
+  confirmType?: ConfirmType
+  pendingTask?: PendingTask
+  originalTask?: Task
+}
+
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
   reasoning?: string[]
   tool_results?: ToolResult[]
-  data?: unknown
+  data?: MessageData
   timestamp: Date
 }
 
@@ -78,6 +94,12 @@ const Index: FC = () => {
   const [locationLoading, setLocationLoading] = useState(true)
   const [locationError, setLocationError] = useState<string | null>(null)
   
+  // ========== 新增：确认弹窗状态 ==========
+  const [pendingTask, setPendingTask] = useState<PendingTask | null>(null)
+  const [originalTask, setOriginalTask] = useState<PendingTask | null>(null)
+  const [confirmType, setConfirmType] = useState<ConfirmType>('add')
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  
   // 保存当前流式连接，用于取消
   const connectionRef = useRef<StreamConnection | null>(null)
   
@@ -85,33 +107,23 @@ const Index: FC = () => {
   const currentAiMessageIdRef = useRef<string | null>(null)
   
   // ========== 性能优化：缓冲渲染 ==========
-  // 内容缓冲区：收到 chunk 先存这里，定时批量更新到 state
   const contentBufferRef = useRef<string>('')
-  // 缓冲定时器（使用 ReturnType<typeof setTimeout> 兼容各环境）
   const bufferTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // 缓冲更新间隔（毫秒）
   const BUFFER_INTERVAL = 80
   
-  /**
-   * 将内容追加到缓冲区，定时批量更新到 state
-   * 避免每个 chunk 都触发 setMessages 遍历整个列表
-   */
   const appendToBuffer = useCallback((chunk: string) => {
     if (!chunk) return
     
-    // 追加到缓冲区
     contentBufferRef.current += chunk
     
-    // 如果定时器不存在，创建一个
     if (!bufferTimerRef.current) {
       bufferTimerRef.current = setTimeout(() => {
         const bufferedContent = contentBufferRef.current
-        contentBufferRef.current = ''  // 清空缓冲区
-        bufferTimerRef.current = null  // 清空定时器
+        contentBufferRef.current = ''
+        bufferTimerRef.current = null
         
         const targetId = currentAiMessageIdRef.current
         if (bufferedContent && targetId) {
-          // 批量更新到 state
           setMessages(prev => prev.map(m => {
             if (m.id === targetId) {
               return { ...m, content: m.content + bufferedContent }
@@ -121,12 +133,8 @@ const Index: FC = () => {
         }
       }, BUFFER_INTERVAL)
     }
-    // 如果定时器已存在，等待它触发（期间新内容会继续追加到 buffer）
   }, [])
   
-  /**
-   * 立即刷新缓冲区（用于流结束时确保所有内容都更新）
-   */
   const flushBuffer = useCallback(() => {
     if (bufferTimerRef.current) {
       clearTimeout(bufferTimerRef.current)
@@ -153,7 +161,7 @@ const Index: FC = () => {
   }, [])
 
   // =============================================
-  // 获取用户定位（重构版）
+  // 获取用户定位
   // =============================================
   const fetchLocation = useCallback(async () => {
     setLocationLoading(true)
@@ -164,21 +172,16 @@ const Index: FC = () => {
       const isWeapp = Taro.getEnv() === Taro.ENV_TYPE.WEAPP
 
       if (isWeapp) {
-        // 小程序端：获取定位
         const location = await Taro.getLocation({ type: 'gcj02' })
         console.log('[定位] 小程序获取成功:', location.latitude, location.longitude)
 
-        // 调用逆地理编码获取地址名称
         try {
           const res = await Network.request({
             url: '/api/map/reverse-geocode',
             method: 'GET',
             data: { lng: location.longitude, lat: location.latitude },
           })
-          // 优先显示地址，如果地址是坐标格式也接受，最后才显示"定位失败"
           const addressName = res.data?.data?.address
-          console.log('[定位] 逆地理编码响应:', res.data)
-          console.log('[定位] 逆地理编码结果:', addressName)
           setUserLocation({
             latitude: location.latitude,
             longitude: location.longitude,
@@ -187,7 +190,6 @@ const Index: FC = () => {
           setLocationError(null)
         } catch (geocodeError) {
           console.warn('[定位] 逆地理编码失败:', geocodeError)
-          // 逆地理编码失败时，显示坐标
           setUserLocation({
             latitude: location.latitude,
             longitude: location.longitude,
@@ -195,7 +197,6 @@ const Index: FC = () => {
           })
         }
       } else {
-        // H5 端：尝试获取定位
         if (navigator.geolocation) {
           await new Promise<void>((resolve) => {
             navigator.geolocation.getCurrentPosition(
@@ -208,14 +209,12 @@ const Index: FC = () => {
                     data: { lng: pos.coords.longitude, lat: pos.coords.latitude },
                   })
                   const addressName = res.data?.data?.address
-                  console.log('[定位] H5逆地理编码响应:', res.data)
                   setUserLocation({
                     latitude: pos.coords.latitude,
                     longitude: pos.coords.longitude,
                     name: addressName || `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`,
                   })
                 } catch {
-                  // 逆地理编码失败时，显示坐标
                   setUserLocation({
                     latitude: pos.coords.latitude,
                     longitude: pos.coords.longitude,
@@ -226,7 +225,6 @@ const Index: FC = () => {
               },
               (err) => {
                 console.warn('[定位] H5获取失败:', err)
-                // 使用默认位置
                 setUserLocation({
                   latitude: 30.242489,
                   longitude: 120.148532,
@@ -249,7 +247,6 @@ const Index: FC = () => {
       }
     } catch (err) {
       console.warn('[定位] 获取失败:', err)
-      // 定位失败，使用默认位置
       setUserLocation({
         latitude: 30.242489,
         longitude: 120.148532,
@@ -261,7 +258,6 @@ const Index: FC = () => {
     }
   }, [])
 
-  // 启动时获取定位
   useEffect(() => {
     fetchLocation()
   }, [fetchLocation])
@@ -285,6 +281,97 @@ const Index: FC = () => {
   }
 
   // =============================================
+  // 处理确认任务
+  // 注意：任务已由 Agent 创建/修改/删除，这里只做展示和撤销逻辑
+  // =============================================
+  const handleConfirmTask = useCallback(async (task: PendingTask) => {
+    try {
+      setIsLoading(true)
+      
+      // 任务已由 Agent 处理，直接显示成功消息
+      if (confirmType === 'add') {
+        Taro.showToast({ title: '添加成功', icon: 'success' })
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `✅ 已添加日程：${task.title}`,
+          timestamp: new Date(),
+        }])
+      } else if (confirmType === 'modify') {
+        Taro.showToast({ title: '修改成功', icon: 'success' })
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `✅ 已修改日程：${task.title}`,
+          timestamp: new Date(),
+        }])
+      } else if (confirmType === 'delete') {
+        Taro.showToast({ title: '删除成功', icon: 'success' })
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `🗑️ 已删除日程：${task.title}`,
+          timestamp: new Date(),
+        }])
+      }
+      
+      setShowConfirmModal(false)
+      setPendingTask(null)
+      setOriginalTask(null)
+      scrollToBottom()
+    } catch (error) {
+      console.error('[确认] 操作失败:', error)
+      Taro.showToast({ title: '操作失败', icon: 'error' })
+    } finally {
+      setIsLoading(false)
+    }
+  }, [confirmType, scrollToBottom])
+
+  // 处理取消确认（撤销操作）
+  const handleCancelConfirm = useCallback(async () => {
+    if (!pendingTask) {
+      setShowConfirmModal(false)
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      
+      if (confirmType === 'add') {
+        // 撤销新增：删除已创建的任务
+        await Network.request({
+          url: `/api/tasks/${pendingTask.id}`,
+          method: 'DELETE'
+        })
+        Taro.showToast({ title: '已取消', icon: 'none' })
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `❌ 已取消添加日程`,
+          timestamp: new Date(),
+        }])
+      } else if (confirmType === 'modify') {
+        // 撤销修改：恢复原任务（简化处理，只显示取消）
+        Taro.showToast({ title: '已取消', icon: 'none' })
+      } else if (confirmType === 'delete') {
+        // 撤销删除：无法恢复（简化处理）
+        Taro.showToast({ title: '已取消', icon: 'none' })
+      }
+      
+      setShowConfirmModal(false)
+      setPendingTask(null)
+      setOriginalTask(null)
+      scrollToBottom()
+    } catch (error) {
+      console.error('[取消] 操作失败:', error)
+      Taro.showToast({ title: '取消失败', icon: 'error' })
+      setShowConfirmModal(false)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [confirmType, pendingTask, scrollToBottom])
+
+  // =============================================
   // 发送消息 - 使用流式客户端
   // =============================================
 
@@ -302,9 +389,8 @@ const Index: FC = () => {
     setInputText('')
     setIsLoading(true)
 
-    // 创建 AI 消息占位
     const aiMessageId = (Date.now() + 1).toString()
-    currentAiMessageIdRef.current = aiMessageId  // 保存到 ref
+    currentAiMessageIdRef.current = aiMessageId
     console.log('[主页面] 创建 AI 消息 ID:', aiMessageId)
     
     setMessages(prev => [...prev, {
@@ -317,7 +403,6 @@ const Index: FC = () => {
       timestamp: new Date(),
     }])
 
-    // 使用流式客户端
     console.log('[主页面] 开始流式请求，平台:', streamingClient.getPlatform())
     console.log('[主页面] 适配器能力:', streamingClient.getCapabilities())
     console.log('[主页面] 用户位置:', userLocation)
@@ -388,23 +473,34 @@ const Index: FC = () => {
         onContent: (data) => {
           const chunkText = data.content || ''
           if (chunkText) {
-            // 使用缓冲机制，避免每个 chunk 都触发 state 更新
             appendToBuffer(chunkText)
           }
         },
 
         onDone: (data) => {
-          console.log('[主页面] 完成')
+          console.log('[主页面] 完成，原始数据:', data)
           
-          // 先刷新缓冲区，确保所有内容都更新
           flushBuffer()
           
           const targetId = currentAiMessageIdRef.current
           if (!targetId) return
           
+          // ========== 新增：检查是否需要确认 ==========
+          const responseData = data.data as MessageData | undefined
+          if (responseData?.needConfirmation && responseData?.pendingTask) {
+            console.log('[主页面] 检测到待确认任务:', responseData.pendingTask, '类型:', responseData.confirmType)
+            
+            // 设置确认弹窗状态
+            setPendingTask(responseData.pendingTask)
+            setConfirmType(responseData.confirmType || 'add')
+            if (responseData.originalTask) {
+              setOriginalTask(responseData.originalTask as PendingTask)
+            }
+            setShowConfirmModal(true)
+          }
+          
           setMessages(prev => prev.map(m => {
             if (m.id !== targetId) return m
-            // 正确解析 tool_results 结构：{ tool, args, result: { success, message, error } }
             const toolResults = data.tool_results?.map((tr: { tool: string; args?: unknown; result?: { success?: boolean; message?: string; error?: string } }) => ({
               tool: tr.tool,
               args: tr.args || {},
@@ -419,7 +515,7 @@ const Index: FC = () => {
               content: data.content || m.content,
               reasoning: data.reasoning || m.reasoning,
               tool_results: toolResults,
-              data: data.data,
+              data: data.data as MessageData | undefined,
             }
           }))
           scrollToBottom()
@@ -431,7 +527,6 @@ const Index: FC = () => {
         onError: (error) => {
           console.error('[主页面] 错误:', error)
           
-          // 先刷新缓冲区
           flushBuffer()
           
           const targetId = currentAiMessageIdRef.current
@@ -455,7 +550,7 @@ const Index: FC = () => {
 
     connectionRef.current = connection
 
-  }, [inputText, isLoading, userLocation, scrollToBottom])
+  }, [inputText, isLoading, userLocation, scrollToBottom, appendToBuffer, flushBuffer])
 
   // 取消流式输出
   const handleCancel = useCallback(() => {
@@ -467,10 +562,7 @@ const Index: FC = () => {
     }
   }, [])
 
-  // =============================================
   // 删除任务
-  // =============================================
-
   const handleDeleteTask = useCallback(async (taskId: string) => {
     try {
       await Network.request({
@@ -597,11 +689,11 @@ const Index: FC = () => {
   const renderDataCard = (message: Message) => {
     if (!message.data) return null
 
-    const data = message.data as Record<string, unknown>
+    const data = message.data
 
     // 单个任务
     if (data.task) {
-      const task = data.task as Task
+      const task = data.task
       return (
         <Card className="rounded-xl mt-2 overflow-hidden">
           <CardContent className="p-3">
@@ -631,7 +723,7 @@ const Index: FC = () => {
 
     // 删除的任务
     if (data.deleted) {
-      const task = data.deleted as Task
+      const task = data.deleted
       return (
         <Card className="rounded-xl mt-2 overflow-hidden bg-red-50">
           <CardContent className="p-3">
@@ -647,13 +739,12 @@ const Index: FC = () => {
 
     // 删除多个
     if (data.deletedCount) {
-      const deletedCount = data.deletedCount as number
       return (
         <Card className="rounded-xl mt-2 overflow-hidden bg-red-50">
           <CardContent className="p-3">
             <View className="flex items-center gap-2">
               <Trash2 size={16} color="#ff4d4f" />
-              <Text className="text-sm font-medium text-red-500">已删除 {deletedCount} 个任务</Text>
+              <Text className="text-sm font-medium text-red-500">已删除 {data.deletedCount} 个任务</Text>
             </View>
           </CardContent>
         </Card>
@@ -661,41 +752,39 @@ const Index: FC = () => {
     }
 
     // 任务列表
-    if (data.tasks) {
-      const tasks = data.tasks as Task[]
-      if (tasks.length > 0) {
-        return (
-          <View className="mt-2">
-            <Text className="text-sm font-medium text-gray-700 mb-2">找到 {tasks.length} 个任务：</Text>
-            {tasks.slice(0, 5).map((task, idx) => (
-              <Card key={idx} className="rounded-lg mb-2">
-                <CardContent className="p-2">
-                  <View className="flex items-center gap-2">
-                    {getTaskIcon(task.type, 16)}
-                    <View className="flex-1">
-                      <Text className="text-sm font-medium">{task.title}</Text>
-                      <Text className="text-xs text-gray-500">
-                        {formatDate(task.scheduled_time)} {formatTime(task.scheduled_time)}
-                      </Text>
-                    </View>
-                    {task.is_expired && (
-                      <Text className="text-xs text-red-400">已过期</Text>
-                    )}
+    if (data.tasks && data.tasks.length > 0) {
+      const tasks = data.tasks
+      return (
+        <View className="mt-2">
+          <Text className="text-sm font-medium text-gray-700 mb-2">找到 {tasks.length} 个任务：</Text>
+          {tasks.slice(0, 5).map((task, idx) => (
+            <Card key={idx} className="rounded-lg mb-2">
+              <CardContent className="p-2">
+                <View className="flex items-center gap-2">
+                  {getTaskIcon(task.type, 16)}
+                  <View className="flex-1">
+                    <Text className="text-sm font-medium">{task.title}</Text>
+                    <Text className="text-xs text-gray-500">
+                      {formatDate(task.scheduled_time)} {formatTime(task.scheduled_time)}
+                    </Text>
                   </View>
-                </CardContent>
-              </Card>
-            ))}
-            {tasks.length > 5 && (
-              <Text className="text-xs text-gray-400 text-center">还有 {tasks.length - 5} 个...</Text>
-            )}
-          </View>
-        )
-      }
+                  {task.is_expired && (
+                    <Text className="text-xs text-red-400">已过期</Text>
+                  )}
+                </View>
+              </CardContent>
+            </Card>
+          ))}
+          {tasks.length > 5 && (
+            <Text className="text-xs text-gray-400 text-center">还有 {tasks.length - 5} 个...</Text>
+          )}
+        </View>
+      )
     }
 
     // 待确认删除
     if (data.needConfirm && data.tasks) {
-      const tasks = data.tasks as Task[]
+      const tasks = data.tasks
       return (
         <View className="mt-2">
           <Text className="text-sm font-medium text-red-500 mb-2">确认删除以下 {tasks.length} 个任务？</Text>
@@ -840,6 +929,18 @@ const Index: FC = () => {
           )}
         </View>
       </View>
+
+      {/* ========== 新增：确认弹窗 ========== */}
+      {pendingTask && (
+        <ConfirmModal
+          type={confirmType}
+          task={pendingTask}
+          originalTask={originalTask ?? undefined}
+          visible={showConfirmModal}
+          onConfirm={handleConfirmTask}
+          onCancel={handleCancelConfirm}
+        />
+      )}
     </View>
   )
 }

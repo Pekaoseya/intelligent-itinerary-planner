@@ -2,7 +2,7 @@
  * 任务控制器
  */
 
-import { Controller, Get, Delete, Param, Query, Inject, forwardRef } from '@nestjs/common'
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, Inject, forwardRef } from '@nestjs/common'
 import { TaskService } from './task.service'
 import { TaskRepository } from './task.repository'
 
@@ -49,6 +49,27 @@ export class TaskController {
   }
 
   /**
+   * 创建任务
+   */
+  @Post()
+  async createTask(@Body() taskData: any) {
+    try {
+      const task = await this.taskService.createTask('default-user', taskData)
+      return {
+        code: 200,
+        msg: '创建成功',
+        data: task,
+      }
+    } catch (error) {
+      return {
+        code: 500,
+        msg: '创建失败',
+        error: error.message,
+      }
+    }
+  }
+
+  /**
    * 获取单个任务详情
    */
   @Get(':id')
@@ -61,6 +82,27 @@ export class TaskController {
       return { code: 200, msg: 'success', data: task }
     } catch (error) {
       return { code: 500, msg: '查询失败', error: error.message }
+    }
+  }
+
+  /**
+   * 更新任务
+   */
+  @Put(':id')
+  async updateTask(@Param('id') id: string, @Body() updates: any) {
+    try {
+      const task = await this.taskService.updateTask(id, 'default-user', updates)
+      return {
+        code: 200,
+        msg: '更新成功',
+        data: task,
+      }
+    } catch (error) {
+      return {
+        code: 500,
+        msg: '更新失败',
+        error: error.message,
+      }
     }
   }
 

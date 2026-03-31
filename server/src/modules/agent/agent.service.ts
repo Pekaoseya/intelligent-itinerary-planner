@@ -785,6 +785,7 @@ ${TOOL_NAMES.map(t => `- ${t.name}: ${t.description}`).join('\n')}
 
   /**
    * 从工具结果中提取数据
+   * 如果是任务创建/修改/删除操作，返回确认信息
    */
   private extractDataFromResults(results: AgentResponse['tool_results']): any {
     const data: any = {}
@@ -794,11 +795,58 @@ ${TOOL_NAMES.map(t => `- ${t.name}: ${t.description}`).join('\n')}
         // 根据工具类型提取数据
         if (r.tool === 'task_query') {
           data.tasks = r.result.data.tasks
-        } else if (r.tool === 'task_create' || r.tool === 'task_update') {
-          data.task = r.result.data
+        } else if (r.tool === 'task_create') {
+          // 任务创建成功，返回确认信息
+          const task = r.result.data
+          data.needConfirmation = true
+          data.confirmType = 'add'
+          data.pendingTask = {
+            id: task.id,
+            title: task.title,
+            type: task.type,
+            scheduled_time: task.scheduled_time,
+            end_time: task.end_time,
+            location_name: task.location_name,
+            destination_name: task.destination_name,
+            metadata: task.metadata,
+            status: task.status,
+          }
+          data.task = task
+        } else if (r.tool === 'task_update') {
+          // 任务更新成功，返回确认信息
+          const task = r.result.data
+          data.needConfirmation = true
+          data.confirmType = 'modify'
+          data.pendingTask = {
+            id: task.id,
+            title: task.title,
+            type: task.type,
+            scheduled_time: task.scheduled_time,
+            end_time: task.end_time,
+            location_name: task.location_name,
+            destination_name: task.destination_name,
+            metadata: task.metadata,
+            status: task.status,
+          }
+          data.task = task
         } else if (r.tool === 'task_delete') {
+          // 任务删除成功，返回确认信息
           if (r.result.data.deleted) {
-            data.deleted = r.result.data.deleted
+            const task = r.result.data.deleted
+            data.needConfirmation = true
+            data.confirmType = 'delete'
+            data.pendingTask = {
+              id: task.id,
+              title: task.title,
+              type: task.type,
+              scheduled_time: task.scheduled_time,
+              end_time: task.end_time,
+              location_name: task.location_name,
+              destination_name: task.destination_name,
+              metadata: task.metadata,
+              status: task.status,
+            }
+            data.deleted = task
           } else if (r.result.data.count) {
             data.deletedCount = r.result.data.count
           }
