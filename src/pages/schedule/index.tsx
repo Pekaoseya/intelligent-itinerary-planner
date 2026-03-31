@@ -242,7 +242,7 @@ const SchedulePage: FC = () => {
         className="bg-white border-t border-gray-200 px-4 py-2"
         style={{
           position: 'fixed',
-          bottom: tabBarHeight,
+          bottom: 0,
           left: 0,
           right: 0,
           width: '100%',

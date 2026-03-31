@@ -67,24 +67,31 @@ export const ScheduleStatsCard: FC<ScheduleStatsCardProps> = ({ stats }) => {
 
       {/* 一周分布 */}
       <Card className="rounded-xl">
-        <CardContent className="p-4">
-          <Text className="text-sm text-gray-500 mb-3">一周任务分布</Text>
-          <View className="flex items-end justify-around h-20">
+        <CardContent className="p-4" style={{ overflow: 'hidden' }}>
+          <View className="mb-3" style={{ minHeight: '20px' }}>
+            <Text className="text-sm text-gray-500">一周任务分布</Text>
+          </View>
+          <View
+            className="flex items-end justify-around"
+            style={{ height: '90px', width: '100%', maxWidth: '100%', overflow: 'hidden' }}
+          >
             {Object.entries(stats.by_weekday).map(([key, value]) => {
               const config = WEEKDAY_CONFIG[key]
               const maxVal = getMaxValue(stats.by_weekday)
-              const height = maxVal > 0 ? (value / maxVal) * 60 : 0
+              const height = maxVal > 0 ? (value / maxVal) * 45 : 0
               return (
-                <View key={key} className="flex flex-col items-center">
-                  <Text className="text-xs text-gray-500 mb-1">{value}</Text>
+                <View key={key} className="flex flex-col items-center" style={{ minWidth: 0, flex: 1 }}>
+                  <Text className="text-xs text-gray-500 mb-2">{value}</Text>
                   <View
-                    className="w-6 rounded-t"
+                    className="rounded-t"
                     style={{
-                      height: `${height}px`,
+                      width: '24px',
+                      maxWidth: '32px',
+                      height: `${Math.max(height, 4)}px`,
                       backgroundColor: config?.isWeekend ? '#ff7875' : '#1890ff',
                     }}
                   />
-                  <Text className={`text-xs mt-2 ${config?.isWeekend ? 'text-red-400' : 'text-gray-400'}`}>
+                  <Text className={`text-xs mt-2 ${config?.isWeekend ? 'text-red-400' : 'text-gray-400'}`} style={{ whiteSpace: 'nowrap' }}>
                     {config?.name || key}
                   </Text>
                 </View>
