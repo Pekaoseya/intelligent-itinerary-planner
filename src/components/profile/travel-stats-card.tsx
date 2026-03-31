@@ -127,21 +127,21 @@ export const TravelStatsCard: FC<TravelStatsCardProps> = ({ stats }) => {
           </View>
           <View
             className="flex items-end justify-around"
-            style={{ height: '100px', width: '100%', maxWidth: '100%', overflow: 'hidden' }}
+            style={{ height: '90px', width: '100%', maxWidth: '100%', overflow: 'hidden' }}
           >
             {Object.entries(stats.time_distribution).map(([key, value]) => {
               const config = TIME_PERIOD_CONFIG[key]
               const maxVal = getMaxValue(stats.time_distribution)
-              const height = maxVal > 0 ? (value / maxVal) * 60 : 0
+              const height = maxVal > 0 ? (value / maxVal) * 45 : 0
               return (
                 <View key={key} className="flex flex-col items-center" style={{ minWidth: 0, flex: 1 }}>
-                  <Text className="text-xs text-gray-500 mb-1">{value}</Text>
+                  <Text className="text-xs text-gray-500 mb-2">{value}</Text>
                   <View
                     className="rounded-t"
                     style={{
                       width: '24px',
                       maxWidth: '32px',
-                      height: `${Math.max(height, 3.5)}px`,
+                      height: `${Math.max(height, 4)}px`,
                       backgroundColor: config?.color || '#999',
                     }}
                   />
