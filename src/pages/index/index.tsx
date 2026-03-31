@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, Input } from '@tarojs/components'
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import type { FC } from 'react'
 import Taro from '@tarojs/taro'
 import { Send, Car, TrainFront, Plane, Users, Utensils, Building2, Check, Loader, MapPin, Clock, Trash2, Locate } from 'lucide-react-taro'
@@ -8,22 +8,18 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { streamingClient, type StreamConnection } from '@/streaming'
 import { ConfirmModal } from '@/components/confirmation'
-import type { PendingTask } from '@/components/confirmation'
 import { simplifyAddress } from '@/utils/address'
+import { useChatStore, type Message, type ToolResult } from '@/stores/chatStore'
+import { useLocationStore } from '@/stores/locationStore'
+import { useConfirmStore } from '@/stores/confirmStore'
 import './index.css'
 
 // =============================================
-// 类型定义
+// 类型定义（业务相关，保留在页面中）
 // =============================================
 
 type TaskType = 'taxi' | 'train' | 'flight' | 'meeting' | 'dining' | 'hotel' | 'todo' | 'other'
 type TaskStatus = 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'expired'
-
-interface UserLocation {
-  latitude: number
-  longitude: number
-  name?: string
-}
 
 interface Task {
   id: string
@@ -38,144 +34,63 @@ interface Task {
   metadata?: Record<string, unknown>
 }
 
-interface ToolResult {
-  tool: string
-  args: unknown
-  result: {
-    success: boolean
-    data?: unknown
-    message?: string
-    error?: string
-  }
-}
-
-// 扩展消息数据类型，支持确认流程
-interface MessageData {
-  task?: Task
-  tasks?: Task[]
-  deleted?: Task
-  deletedCount?: number
-  needConfirm?: boolean
-  // 新增确认相关字段
-  needConfirmation?: boolean
-  confirmType?: 'batch_add' | 'batch_delete' | 'modify'
-  // 批量创建
-  pendingTasks?: PendingTask[]      // 待创建的任务列表
-  pendingCount?: number             // 待创建任务数量
-  // 批量删除
-  pendingDeleteTasks?: Task[]       // 待删除的任务列表
-  pendingDeleteIds?: string[]       // 待删除的任务ID列表
-  pendingDeleteCount?: number       // 待删除任务数量
-  // 单个任务更新
-  originalTask?: PendingTask
-  updatedTask?: PendingTask
-  updates?: any
-}
-
-interface Message {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  reasoning?: string[]
-  tool_results?: ToolResult[]
-  data?: MessageData
-  timestamp: Date
-}
-
 // =============================================
 // 主组件
 // =============================================
 
 const Index: FC = () => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: '您好！我是您的智能助手。\n\n我可以帮您管理任务：打车、火车、飞机、会议、餐饮、酒店、事务等。\n\n直接告诉我您想做什么，我会理解您的需求。',
-      timestamp: new Date(),
-    },
-  ])
-  const [inputText, setInputText] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [scrollCounter, setScrollCounter] = useState(0)
+  // ========== 使用 Store 管理状态 ==========
+  const {
+    messages,
+    inputText,
+    isLoading,
+    scrollCounter,
+    setInputText,
+    addMessage,
+    updateMessage,
+    setLoading,
+    triggerScroll,
+    setConnection,
+    setCurrentAiMessageId,
+    appendToBuffer,
+    flushBuffer,
+  } = useChatStore()
   
-  // 定位相关状态
-  const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
-  const [locationLoading, setLocationLoading] = useState(true)
-  const [locationError, setLocationError] = useState<string | null>(null)
-  const [showLocationDetail, setShowLocationDetail] = useState(false)
+  const {
+    location: userLocation,
+    loading: locationLoading,
+    error: locationError,
+    showDetail: showLocationDetail,
+    setLocation: setUserLocation,
+    setLoading: setLocationLoading,
+    setError: setLocationError,
+    setShowDetail: setShowLocationDetail,
+  } = useLocationStore()
   
-  // ========== 新增：确认弹窗状态 ==========
-  const [confirmType, setConfirmType] = useState<'batch_add' | 'batch_delete' | 'modify'>('batch_add')
-  const [showConfirmModal, setShowConfirmModal] = useState(false)
-  // 批量创建
-  const [pendingTasks, setPendingTasks] = useState<PendingTask[]>([])
-  // 批量删除
-  const [pendingDeleteTasks, setPendingDeleteTasks] = useState<Task[]>([])
-  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([])
-  // 单个任务更新
-  const [originalTask, setOriginalTask] = useState<PendingTask | null>(null)
-  const [updatedTask, setUpdatedTask] = useState<PendingTask | null>(null)
+  const {
+    visible: showConfirmModal,
+    confirmType,
+    pendingTasks,
+    pendingDeleteTasks,
+    pendingDeleteIds,
+    originalTask,
+    updatedTask,
+    showBatchAdd,
+    showBatchDelete,
+    showModify,
+    hide: hideConfirmModal,
+    clearPendingTasks,
+    clearPendingDeleteTasks,
+    clearAll,
+  } = useConfirmStore()
   
   // 保存当前流式连接，用于取消
   const connectionRef = useRef<StreamConnection | null>(null)
-  
-  // 保存当前 AI 消息 ID，避免闭包问题
-  const currentAiMessageIdRef = useRef<string | null>(null)
-  
-  // ========== 性能优化：缓冲渲染 ==========
-  const contentBufferRef = useRef<string>('')
-  const bufferTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const BUFFER_INTERVAL = 80
-  
-  const appendToBuffer = useCallback((chunk: string) => {
-    if (!chunk) return
-    
-    contentBufferRef.current += chunk
-    
-    if (!bufferTimerRef.current) {
-      bufferTimerRef.current = setTimeout(() => {
-        const bufferedContent = contentBufferRef.current
-        contentBufferRef.current = ''
-        bufferTimerRef.current = null
-        
-        const targetId = currentAiMessageIdRef.current
-        if (bufferedContent && targetId) {
-          setMessages(prev => prev.map(m => {
-            if (m.id === targetId) {
-              return { ...m, content: m.content + bufferedContent }
-            }
-            return m
-          }))
-        }
-      }, BUFFER_INTERVAL)
-    }
-  }, [])
-  
-  const flushBuffer = useCallback(() => {
-    if (bufferTimerRef.current) {
-      clearTimeout(bufferTimerRef.current)
-      bufferTimerRef.current = null
-    }
-    
-    const bufferedContent = contentBufferRef.current
-    contentBufferRef.current = ''
-    
-    const targetId = currentAiMessageIdRef.current
-    if (bufferedContent && targetId) {
-      setMessages(prev => prev.map(m => {
-        if (m.id === targetId) {
-          return { ...m, content: m.content + bufferedContent }
-        }
-        return m
-      }))
-    }
-  }, [])
 
   // 滚动到底部
   const scrollToBottom = useCallback(() => {
-    setScrollCounter(prev => prev + 1)
-  }, [])
+    triggerScroll()
+  }, [triggerScroll])
 
   // =============================================
   // 获取用户定位
@@ -309,7 +224,7 @@ const Index: FC = () => {
     if (pendingTasks.length === 0) return
 
     try {
-      setIsLoading(true)
+      setLoading(true)
       console.log('[确认] 批量创建任务:', pendingTasks.length)
       
       const res = await Network.request({
@@ -321,29 +236,29 @@ const Index: FC = () => {
       const createdCount = res.data?.data?.createdCount || pendingTasks.length
       Taro.showToast({ title: `成功创建 ${createdCount} 个日程`, icon: 'success' })
       
-      setMessages(prev => [...prev, {
+      addMessage({
         id: Date.now().toString(),
         role: 'assistant',
         content: `✅ 已添加 ${createdCount} 个日程`,
         timestamp: new Date(),
-      }])
+      })
       
-      setShowConfirmModal(false)
-      setPendingTasks([])
+      hideConfirmModal()
+      clearPendingTasks()
       scrollToBottom()
     } catch (error) {
       console.error('[确认] 批量创建失败:', error)
       Taro.showToast({ title: '创建失败', icon: 'error' })
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
-  }, [pendingTasks, scrollToBottom])
+  }, [pendingTasks, scrollToBottom, setLoading, addMessage, hideConfirmModal, clearPendingTasks])
 
   const handleConfirmBatchDelete = useCallback(async () => {
     if (pendingDeleteIds.length === 0) return
 
     try {
-      setIsLoading(true)
+      setLoading(true)
       console.log('[确认] 批量删除任务:', pendingDeleteIds.length)
       
       const res = await Network.request({
@@ -355,30 +270,29 @@ const Index: FC = () => {
       const deletedCount = res.data?.data?.deletedCount || pendingDeleteIds.length
       Taro.showToast({ title: `已删除 ${deletedCount} 个日程`, icon: 'success' })
       
-      setMessages(prev => [...prev, {
+      addMessage({
         id: Date.now().toString(),
         role: 'assistant',
         content: `🗑️ 已删除 ${deletedCount} 个日程`,
         timestamp: new Date(),
-      }])
+      })
       
-      setShowConfirmModal(false)
-      setPendingDeleteTasks([])
-      setPendingDeleteIds([])
+      hideConfirmModal()
+      clearPendingDeleteTasks()
       scrollToBottom()
     } catch (error) {
       console.error('[确认] 批量删除失败:', error)
       Taro.showToast({ title: '删除失败', icon: 'error' })
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
-  }, [pendingDeleteIds, scrollToBottom])
+  }, [pendingDeleteIds, scrollToBottom, setLoading, addMessage, hideConfirmModal, clearPendingDeleteTasks])
 
   const handleConfirmModify = useCallback(async () => {
     if (!updatedTask) return
 
     try {
-      setIsLoading(true)
+      setLoading(true)
       console.log('[确认] 更新任务:', updatedTask.title)
       
       // 调用更新 API
@@ -390,24 +304,23 @@ const Index: FC = () => {
       
       Taro.showToast({ title: '修改成功', icon: 'success' })
       
-      setMessages(prev => [...prev, {
+      addMessage({
         id: Date.now().toString(),
         role: 'assistant',
         content: `✅ 已修改日程：${updatedTask.title}`,
         timestamp: new Date(),
-      }])
+      })
       
-      setShowConfirmModal(false)
-      setOriginalTask(null)
-      setUpdatedTask(null)
+      hideConfirmModal()
+      clearAll()
       scrollToBottom()
     } catch (error) {
       console.error('[确认] 更新失败:', error)
       Taro.showToast({ title: '修改失败', icon: 'error' })
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
-  }, [updatedTask, scrollToBottom])
+  }, [updatedTask, scrollToBottom, setLoading, addMessage, hideConfirmModal, clearAll])
 
   // 处理取消确认 - 直接关闭弹窗（不执行任何操作），并在对话框显示提示
   const handleCancelConfirm = useCallback(() => {
@@ -424,23 +337,19 @@ const Index: FC = () => {
     }
     
     // 在对话框添加取消消息
-    setMessages(prev => [...prev, {
+    addMessage({
       id: Date.now().toString(),
       role: 'assistant',
       content: `❌ ${cancelMessage}`,
       timestamp: new Date(),
-    }])
+    })
     
     // 重置状态
-    setShowConfirmModal(false)
-    setPendingTasks([])
-    setPendingDeleteTasks([])
-    setPendingDeleteIds([])
-    setOriginalTask(null)
-    setUpdatedTask(null)
+    hideConfirmModal()
+    clearAll()
     
     scrollToBottom()
-  }, [confirmType, pendingTasks.length, pendingDeleteTasks.length, scrollToBottom])
+  }, [confirmType, pendingTasks.length, pendingDeleteTasks.length, scrollToBottom, addMessage, hideConfirmModal, clearAll])
 
   // =============================================
   // 发送消息 - 使用流式客户端
@@ -456,15 +365,15 @@ const Index: FC = () => {
       timestamp: new Date(),
     }
 
-    setMessages(prev => [...prev, userMessage])
+    addMessage(userMessage)
     setInputText('')
-    setIsLoading(true)
+    setLoading(true)
 
     const aiMessageId = (Date.now() + 1).toString()
-    currentAiMessageIdRef.current = aiMessageId
+    setCurrentAiMessageId(aiMessageId)
     console.log('[主页面] 创建 AI 消息 ID:', aiMessageId)
     
-    setMessages(prev => [...prev, {
+    addMessage({
       id: aiMessageId,
       role: 'assistant',
       content: '',
@@ -472,7 +381,7 @@ const Index: FC = () => {
       tool_results: [],
       data: undefined,
       timestamp: new Date(),
-    }])
+    })
 
     console.log('[主页面] 开始流式请求，平台:', streamingClient.getPlatform())
     console.log('[主页面] 适配器能力:', streamingClient.getCapabilities())
@@ -492,59 +401,50 @@ const Index: FC = () => {
       },
       {
         onStart: (data) => {
-          console.log('[主页面] 开始处理:', data, 'targetId:', currentAiMessageIdRef.current)
-          const targetId = currentAiMessageIdRef.current
-          if (targetId) {
-            setMessages(prev => prev.map(m =>
-              m.id === targetId ? { ...m, reasoning: ['正在思考...'] } : m
-            ))
-          }
+          console.log('[主页面] 开始处理:', data, 'targetId:', aiMessageId)
+          updateMessage(aiMessageId, { reasoning: ['正在思考...'] })
           scrollToBottom()
         },
 
         onReasoning: (data) => {
           console.log('[主页面] 思考步骤:', data.step)
-          const targetId = currentAiMessageIdRef.current
-          if (!targetId) return
+          const currentMessages = useChatStore.getState().messages
+          const msg = currentMessages.find(m => m.id === aiMessageId)
+          if (!msg) return
           
-          setMessages(prev => prev.map(m => {
-            if (m.id !== targetId) return m
-            const newReasoning = [...(m.reasoning || [])]
-            if (data.step && !newReasoning.includes(data.step)) {
-              newReasoning.push(data.step)
-            }
-            return { ...m, reasoning: newReasoning }
-          }))
+          const newReasoning = [...(msg.reasoning || [])]
+          if (data.step && !newReasoning.includes(data.step)) {
+            newReasoning.push(data.step)
+          }
+          updateMessage(aiMessageId, { reasoning: newReasoning })
           scrollToBottom()
         },
 
         onToolResult: (data) => {
           console.log('[主页面] 工具结果:', data.tool, data.success)
-          const targetId = currentAiMessageIdRef.current
-          if (!targetId) return
+          const currentMessages = useChatStore.getState().messages
+          const msg = currentMessages.find(m => m.id === aiMessageId)
+          if (!msg) return
           
-          setMessages(prev => prev.map(m => {
-            if (m.id !== targetId) return m
-            const newToolResults = [...(m.tool_results || [])]
-            newToolResults.push({
-              tool: data.tool,
-              args: {},
-              result: {
-                success: data.success,
-                message: data.message,
-                error: data.error,
-                data: data.data,
-              },
-            })
-            return { ...m, tool_results: newToolResults }
-          }))
+          const newToolResults = [...(msg.tool_results || [])]
+          newToolResults.push({
+            tool: data.tool,
+            args: {},
+            result: {
+              success: data.success,
+              message: data.message,
+              error: data.error,
+              data: data.data,
+            },
+          })
+          updateMessage(aiMessageId, { tool_results: newToolResults })
           scrollToBottom()
         },
 
         onContent: (data) => {
           const chunkText = data.content || ''
           if (chunkText) {
-            appendToBuffer(chunkText)
+            appendToBuffer(chunkText, aiMessageId)
           }
         },
 
@@ -553,62 +453,49 @@ const Index: FC = () => {
           
           flushBuffer()
           
-          const targetId = currentAiMessageIdRef.current
-          if (!targetId) return
-          
           // ========== 检查是否需要确认 ==========
-          const responseData = data.data as MessageData | undefined
+          const responseData = data.data as any
           if (responseData?.needConfirmation) {
             console.log('[主页面] 检测到待确认操作，类型:', responseData.confirmType)
-            
-            // 设置确认类型
-            setConfirmType(responseData.confirmType || 'batch_add')
             
             // 批量创建任务
             if (responseData.confirmType === 'batch_add' && responseData.pendingTasks) {
               console.log('[主页面] 待创建任务数量:', responseData.pendingTasks.length)
-              setPendingTasks(responseData.pendingTasks)
-              setShowConfirmModal(true)
+              showBatchAdd(responseData.pendingTasks)
             }
             // 批量删除任务
             else if (responseData.confirmType === 'batch_delete' && responseData.pendingDeleteTasks) {
               console.log('[主页面] 待删除任务数量:', responseData.pendingDeleteTasks.length)
-              setPendingDeleteTasks(responseData.pendingDeleteTasks)
-              setPendingDeleteIds(responseData.pendingDeleteIds || [])
-              setShowConfirmModal(true)
+              showBatchDelete(responseData.pendingDeleteTasks, responseData.pendingDeleteIds || [])
             }
             // 单个任务更新
             else if (responseData.confirmType === 'modify' && responseData.updatedTask) {
               console.log('[主页面] 待更新任务:', responseData.updatedTask.title)
-              setOriginalTask(responseData.originalTask as PendingTask || null)
-              setUpdatedTask(responseData.updatedTask)
-              setShowConfirmModal(true)
+              showModify(responseData.originalTask, responseData.updatedTask)
             }
           }
           
-          setMessages(prev => prev.map(m => {
-            if (m.id !== targetId) return m
-            const toolResults = data.tool_results?.map((tr: { tool: string; args?: unknown; result?: { success?: boolean; message?: string; error?: string } }) => ({
-              tool: tr.tool,
-              args: tr.args || {},
-              result: {
-                success: tr.result?.success ?? true,
-                message: tr.result?.message,
-                error: tr.result?.error,
-              },
-            })) || m.tool_results
-            return {
-              ...m,
-              content: data.content || m.content,
-              reasoning: data.reasoning || m.reasoning,
-              tool_results: toolResults,
-              data: data.data as MessageData | undefined,
-            }
-          }))
+          const toolResults = data.tool_results?.map((tr: { tool: string; args?: unknown; result?: { success?: boolean; message?: string; error?: string } }) => ({
+            tool: tr.tool,
+            args: tr.args || {},
+            result: {
+              success: tr.result?.success ?? true,
+              message: tr.result?.message,
+              error: tr.result?.error,
+            },
+          })) || []
+          
+          updateMessage(aiMessageId, {
+            content: data.content || '',
+            reasoning: data.reasoning || [],
+            tool_results: toolResults,
+            data: data.data as any,
+          })
+          
           scrollToBottom()
-          setIsLoading(false)
-          connectionRef.current = null
-          currentAiMessageIdRef.current = null
+          setLoading(false)
+          setConnection(null)
+          setCurrentAiMessageId(null)
         },
 
         onError: (error) => {
@@ -616,26 +503,21 @@ const Index: FC = () => {
           
           flushBuffer()
           
-          const targetId = currentAiMessageIdRef.current
-          if (targetId) {
-            setMessages(prev => prev.map(m =>
-              m.id === targetId ? { ...m, content: `错误: ${error.message || '未知错误'}` } : m
-            ))
-          }
+          updateMessage(aiMessageId, { content: `错误: ${error.message || '未知错误'}` })
           scrollToBottom()
-          setIsLoading(false)
-          connectionRef.current = null
-          currentAiMessageIdRef.current = null
+          setLoading(false)
+          setConnection(null)
+          setCurrentAiMessageId(null)
         },
 
         onFinally: () => {
           console.log('[主页面] 最终回调')
-          setIsLoading(false)
+          setLoading(false)
         },
       }
     )
 
-    connectionRef.current = connection
+    setConnection(connection)
 
   }, [inputText, isLoading, userLocation, scrollToBottom, appendToBuffer, flushBuffer])
 
@@ -645,9 +527,9 @@ const Index: FC = () => {
       console.log('[主页面] 用户取消')
       connectionRef.current.abort()
       connectionRef.current = null
-      setIsLoading(false)
+      setLoading(false)
     }
-  }, [])
+  }, [setLoading])
 
   // 删除任务
   const handleDeleteTask = useCallback(async (taskId: string) => {
@@ -780,7 +662,7 @@ const Index: FC = () => {
 
     // 单个任务
     if (data.task) {
-      const task = data.task
+      const task: Task = data.task as Task
       return (
         <Card className="rounded-xl mt-2 overflow-hidden">
           <CardContent className="p-3">

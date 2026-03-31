@@ -1,13 +1,22 @@
 /**
  * 定位状态管理
+ * 管理用户位置相关状态
  */
 import { create } from 'zustand'
+
+// =============================================
+// 类型定义
+// =============================================
 
 export interface UserLocation {
   latitude: number
   longitude: number
   name?: string
 }
+
+// =============================================
+// Store 定义
+// =============================================
 
 interface LocationState {
   // 状态
@@ -34,9 +43,13 @@ const initialState = {
 export const useLocationStore = create<LocationState>((set) => ({
   ...initialState,
   
-  setLocation: (location) => set({ location, loading: false }),
+  setLocation: (location) => set({ location, loading: false, error: null }),
+  
   setLoading: (loading) => set({ loading }),
+  
   setError: (error) => set({ error, loading: false }),
+  
   setShowDetail: (show) => set({ showDetail: show }),
+  
   reset: () => set(initialState),
 }))
