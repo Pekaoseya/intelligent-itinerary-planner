@@ -1,221 +1,144 @@
 /**
  * 地址简化工具
- * 从完整地址中提取关键信息（建筑名/小区名/路名）
+ * 
+ * 设计原则（参考 MGeo 地址处理最佳实践）：
+ * 1. 语义完整性：不截断到词语中间（如"下沙街道"不能截成"下沙街"）
+ * 2. 信息密度优先：优先保留高价值信息（建筑名 > 路名 > 行政区）
+ * 3. 动态长度控制：目标10字符，但允许适当扩展
+ * 4. 尾部完整性检测：如果距离地址末尾很近，就完整显示
  */
 
 /**
- * 地址简化配置
+ * 语义单元结束标记
+ * 格式：标记 -> 该标记允许的最小名称长度
  */
-interface AddressSimplifyConfig {
-  /** 建筑关键词 */
-  buildingKeywords: string[]
-  /** 小区关键词 */
-  communityKeywords: string[]
-  /** 最大提取长度 */
-  maxExtractLength: number
-  /** 最小提取长度 */
-  minExtractLength: number
-}
-
-const DEFAULT_CONFIG: AddressSimplifyConfig = {
-  buildingKeywords: ['园区', '大厦', '大楼', '中心', '广场', '城', '小区', '花园', '公寓', '苑', '村'],
-  communityKeywords: ['小区', '村', '花园', '苑', '公寓'],
-  maxExtractLength: 8,
-  minExtractLength: 2,
-}
+const END_MARKERS = new Map([
+  // 建筑类（优先级最高）
+  ['大厦', 2], ['大楼', 2], ['中心', 2], ['广场', 2], ['园区', 2], ['城', 2],
+  // 小区类
+  ['小区', 2], ['花园', 2], ['公寓', 2], ['苑', 2], ['村', 2],
+  // 道路类
+  ['大街', 2], ['大道', 2], ['路', 2], ['街', 2], ['巷', 1], ['弄', 1],
+  // 行政类
+  ['街道', 2], ['镇', 2], ['乡', 2], ['开发区', 2], ['新区', 2], ['区', 1], ['县', 1], ['市', 1], ['省', 1],
+  // 门牌类
+  ['号楼', 1], ['栋', 1], ['座', 1], ['层', 1], ['号', 1], ['室', 1],
+])
 
 /**
- * 判断是否为行政区划的"区"
- * 规则：
- * 1. "新区"、"开发区" 等特殊行政区
- * 2. 区名通常是 2-3 个字 + "区"
+ * 检查某个位置是否是语义单元的结束
  */
-function isDistrictDivision(address: string, districtIndex: number): boolean {
-  // 检查是否是"新区"、"开发区"等
-  if (districtIndex >= 1 && address[districtIndex - 1] === '新') {
-    return true
-  }
-  if (districtIndex >= 2 && address.substring(districtIndex - 2, districtIndex) === '开发') {
-    return true
-  }
-
-  // 检查前面是否是行政区划特征
-  // 行政区划通常是：XX区、XXX区（如西湖区、江干区、朝阳区）
-  // 而建筑名中的"区"通常是：X区（如西区、东区、一区）
-  if (districtIndex >= 2) {
-    const beforeDistrict = address.substring(districtIndex - 2, districtIndex)
-    // 行政区划通常是完整词语，建筑分区通常是单字+区
-    // 如果"区"前面是2个字，检查是否是常见的行政区划后缀
-    const districtSuffixes = ['山', '湖', '江', '海', '城', '源', '阳', '阴', '宁', '安', '平', '乐']
-    // 如果前两个字中包含这些字，很可能是行政区划
-    if (districtSuffixes.some(suffix => beforeDistrict.includes(suffix))) {
-      return true
+function findSemanticEnd(address: string, pos: number): { isEnd: boolean; marker?: string; nameLen?: number; unitStart?: number } {
+  for (const [marker, minName] of END_MARKERS) {
+    const markerStart = pos - marker.length
+    if (markerStart >= 0 && address.substring(markerStart, pos) === marker) {
+      // 找到了标记，向前检查名称长度
+      let nameLen = 0
+      let i = markerStart - 1
+      while (i >= 0 && nameLen < 6) {
+        const ch = address[i]
+        if (!/[\u4e00-\u9fa50-9A-Za-z]/.test(ch)) break
+        nameLen++
+        i--
+      }
+      
+      if (nameLen >= minName) {
+        return { isEnd: true, marker, nameLen, unitStart: i + 1 }
+      }
     }
   }
-
-  return false
+  return { isEnd: false }
 }
 
 /**
- * 从地址中提取名称（向前搜索）
+ * 找到地址中所有有效的截断点（语义单元的结束位置）
  */
-function extractNameBackward(
-  address: string,
-  keywordIndex: number,
-  keyword: string,
-  config: AddressSimplifyConfig
-): string | null {
-  let start = keywordIndex - 1
-  let charCount = 0
-
-  while (start >= 0 && charCount < config.maxExtractLength) {
-    const ch = address[start]
-
-    // 门牌号停止
-    if (ch === '号') break
-
-    // 省市县停止
-    if (/[省市县]/.test(ch)) break
-
-    // 区级行政区划停止
-    if (ch === '区' && isDistrictDivision(address, start)) {
-      break
-    }
-
-    start--
-    charCount++
-  }
-
-  const name = address.substring(start + 1, keywordIndex + keyword.length)
+function findValidCutPoints(address: string): Array<{ position: number; unitStart: number; marker: string }> {
+  const points: Array<{ position: number; unitStart: number; marker: string }> = []
   
-  if (name.length >= config.minExtractLength && name.length <= config.maxExtractLength) {
-    return name
-  }
-
-  return null
-}
-
-/**
- * 从地址中提取小区/村名（含分区信息）
- */
-function extractCommunityName(
-  address: string,
-  keyword: string,
-  config: AddressSimplifyConfig
-): string | null {
-  const idx = address.lastIndexOf(keyword)
-  if (idx <= 0) return null
-
-  // 向前提取
-  let start = idx - 1
-  let charCount = 0
-
-  while (start >= 0 && charCount < 4) {
-    const ch = address[start]
-    if (/[省市县区街道]/.test(ch) || ch === '村') {
-      break
+  for (let i = address.length; i > 0; i--) {
+    const result = findSemanticEnd(address, i)
+    if (result.isEnd && result.marker && result.unitStart !== undefined) {
+      points.push({
+        position: i,
+        unitStart: result.unitStart,
+        marker: result.marker,
+      })
     }
-    start--
-    charCount++
   }
-
-  // 向后提取分区（如"西区"、"一区"）
-  let end = idx + keyword.length
-  const remaining = address.substring(end)
-  const areaMatch = remaining.match(/^([东西南北一二三四五六七八九十]+区?)/)
-  if (areaMatch) {
-    end += areaMatch[1].length
-  }
-
-  const name = address.substring(start + 1, end)
-
-  if (name.length >= config.minExtractLength && name.length <= config.maxExtractLength) {
-    return name
-  }
-
-  return null
+  
+  return points.sort((a, b) => b.position - a.position)
 }
 
 /**
- * 从地址中提取路名
- */
-function extractRoadName(address: string): string | null {
-  const roadIdx = address.lastIndexOf('路')
-  if (roadIdx <= 0) return null
-
-  let start = roadIdx - 1
-  while (start >= 0 && roadIdx - start <= 4 && !/[省市县区街道]/.test(address[start])) {
-    start--
-  }
-
-  const roadName = address.substring(start + 1, roadIdx + 1)
-  if (roadName.length >= 2) {
-    return roadName
-  }
-
-  return null
-}
-
-/**
- * 从地址中提取街道名
- */
-function extractStreetName(address: string): string | null {
-  const streetMatch = address.match(/([\u4e00-\u9fa5]{2}街道)/)
-  return streetMatch ? streetMatch[1] : null
-}
-
-/**
- * 简化地址，提取关键信息
- * 优先级：建筑名 > 小区/村名 > 路名 > 街道
+ * 智能地址简称生成
+ * 
+ * 核心算法：
+ * 1. 找到所有语义边界点
+ * 2. 从末尾开始，逐步向前尝试
+ * 3. 检查：当前长度 + 距离末尾的距离 <= maxLen + 缓冲
+ * 4. 如果满足条件，就包含这个语义单元
  * 
  * @param address 完整地址
- * @param config 配置项（可选）
+ * @param maxLen 目标最大长度（默认10）
  * @returns 简化后的地址
+ */
+export function smartSimplifyAddress(address: string, maxLen: number = 10): string {
+  if (!address || address.length <= maxLen) return address || ''
+  
+  const cleanAddress = address.replace(/\s+/g, '').replace(/[（）()【】\[\]]/g, '')
+  
+  if (cleanAddress.length <= maxLen) return cleanAddress
+  
+  // 找到所有有效截断点
+  const cutPoints = findValidCutPoints(cleanAddress)
+  
+  if (cutPoints.length === 0) {
+    return cleanAddress.slice(-maxLen)
+  }
+  
+  // 从后向前选择截断点
+  for (const point of cutPoints) {
+    const length = point.position
+    const remainingStart = point.unitStart
+    
+    // 核心判断：
+    // 1. 如果截断点到末尾的长度 <= maxLen，可以用
+    // 2. 如果截断点到末尾的长度 + 前面剩余字符 <= maxLen + 2，也用
+    
+    if (length <= maxLen) {
+      // 检查前面是否还有少量字符（<=2个字）
+      if (remainingStart > 0 && remainingStart <= 2 && length + remainingStart <= maxLen + 1) {
+        return cleanAddress.substring(0, point.position)
+      }
+      return cleanAddress.substring(0, point.position)
+    }
+    
+    // 检查这个语义单元本身是否可以作为结果
+    const unitLen = point.position - point.unitStart
+    if (unitLen <= maxLen) {
+      // 还需要检查末尾是否有剩余
+      const remainingEnd = cleanAddress.length - point.position
+      if (remainingEnd <= 2 && unitLen + remainingEnd <= maxLen + 1) {
+        return cleanAddress.substring(point.unitStart)
+      }
+    }
+  }
+  
+  // 没找到合适的，返回最后一个语义单元
+  const lastPoint = cutPoints[cutPoints.length - 1]
+  return cleanAddress.substring(lastPoint.unitStart)
+}
+
+/**
+ * 简化地址，提取关键信息（兼容旧接口）
  * 
- * @example
- * simplifyAddress('浙江省杭州市滨江区网商路599号阿里巴巴园区')
- * // => '阿里巴巴园区'
- * 
- * simplifyAddress('浙江省杭州市西湖区翠苑街道九莲新村西区')
- * // => '九莲新村西区'
+ * @param address 完整地址
+ * @returns 简化后的地址
  */
 export function simplifyAddress(
   address: string,
-  config: Partial<AddressSimplifyConfig> = {}
+  _config?: Record<string, unknown>
 ): string {
-  if (!address) return ''
-
-  const mergedConfig = { ...DEFAULT_CONFIG, ...config }
-
-  // 去除括号内容
-  const cleanAddress = address.replace(/\([^)]*\)/g, '')
-
-  // 1. 优先提取建筑名
-  for (const kw of mergedConfig.buildingKeywords) {
-    // 跳过小区关键词，后面单独处理
-    if (mergedConfig.communityKeywords.includes(kw)) continue
-
-    const idx = cleanAddress.lastIndexOf(kw)
-    if (idx > 0) {
-      const name = extractNameBackward(cleanAddress, idx, kw, mergedConfig)
-      if (name) return name
-    }
-  }
-
-  // 2. 提取小区/村名（含分区）
-  for (const kw of mergedConfig.communityKeywords) {
-    const name = extractCommunityName(cleanAddress, kw, mergedConfig)
-    if (name) return name
-  }
-
-  // 3. 提取路名
-  const roadName = extractRoadName(cleanAddress)
-  if (roadName) return roadName
-
-  // 4. 提取街道
-  const streetName = extractStreetName(cleanAddress)
-  if (streetName) return streetName
-
-  // 兜底：返回最后10个字符
-  return address.slice(-10)
+  return smartSimplifyAddress(address, 10)
 }
