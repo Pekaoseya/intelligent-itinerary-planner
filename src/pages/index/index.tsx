@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { streamingClient, type StreamConnection } from '@/streaming'
 import { ConfirmModal } from '@/components/confirmation'
 import type { PendingTask } from '@/components/confirmation'
+import { simplifyAddress } from '@/utils/address'
 import './index.css'
 
 // =============================================
@@ -282,105 +283,6 @@ const Index: FC = () => {
   // 简化地址显示（只保留街道和大厦）
   // =============================================
   // 地址简化函数：优先显示建筑名/小区名
-  const simplifyAddress = useCallback((address: string): string => {
-    if (!address) return ''
-    
-    // 去除括号内容
-    const cleanAddress = address.replace(/\([^)]*\)/g, '')
-    
-    // 1. 优先提取建筑名：园区/大厦/大楼/中心/广场/城
-    const buildingKeywords = ['园区', '大厦', '大楼', '中心', '广场', '城']
-    for (const kw of buildingKeywords) {
-      const idx = cleanAddress.lastIndexOf(kw)
-      if (idx > 0) {
-        let start = idx - 1
-        let charCount = 0
-        while (start >= 0 && charCount < 6) {
-          const ch = cleanAddress[start]
-          // 门牌号停止
-          if (ch === '号') break
-          // 行政区划停止（省/市/县）
-          if (/[省市县]/.test(ch)) break
-          // 区级行政区划停止
-          if (ch === '区') {
-            // 检查前面是否有 "新" 或 "开发"（新区/开发区）
-            if (start >= 1) {
-              const prevChar = cleanAddress[start - 1]
-              if (prevChar === '新') {
-                break
-              }
-            }
-            // 检查前面是否是常见区名
-            if (start >= 3) {
-              const beforeDistrict = cleanAddress.substring(start - 2, start)
-              if (/江干|西湖|滨江|余杭|萧山|朝阳|海淀|浦东|南山|福田|龙岗|天河|越秀|鼓楼|玄武|秦淮|建邺/.test(beforeDistrict)) {
-                break
-              }
-            }
-          }
-          start--
-          charCount++
-        }
-        const name = cleanAddress.substring(start + 1, idx + kw.length)
-        if (name.length >= 2 && name.length <= 8) {
-          return name
-        }
-      }
-    }
-    
-    // 2. 提取小区/村名
-    const villageKeywords = ['小区', '村']
-    for (const kw of villageKeywords) {
-      const idx = cleanAddress.lastIndexOf(kw)
-      if (idx > 0) {
-        let start = idx - 1
-        let charCount = 0
-        while (start >= 0 && charCount < 4) {
-          const ch = cleanAddress[start]
-          if (/[省市县区街道]/.test(ch) || ch === '村') {
-            break
-          }
-          start--
-          charCount++
-        }
-        
-        // 向后提取分区（如"西区"）
-        let end = idx + kw.length
-        const remaining = cleanAddress.substring(end)
-        const areaMatch = remaining.match(/^([东西南北一二三四五六七八九十]+区?)/)
-        if (areaMatch) {
-          end += areaMatch[1].length
-        }
-        
-        const name = cleanAddress.substring(start + 1, end)
-        if (name.length >= 2 && name.length <= 8) {
-          return name
-        }
-      }
-    }
-    
-    // 3. 路名
-    const roadIdx = cleanAddress.lastIndexOf('路')
-    if (roadIdx > 0) {
-      let start = roadIdx - 1
-      while (start >= 0 && roadIdx - start <= 4 && !/[省市县区街道]/.test(cleanAddress[start])) {
-        start--
-      }
-      const roadName = cleanAddress.substring(start + 1, roadIdx + 1)
-      if (roadName.length >= 2) {
-        return roadName
-      }
-    }
-    
-    // 4. 街道
-    const streetMatch = cleanAddress.match(/([\u4e00-\u9fa5]{2}街道)/)
-    if (streetMatch) {
-      return streetMatch[1]
-    }
-    
-    // 兜底：返回最后10个字符
-    return address.slice(-10)
-  }, [])
 
   // =============================================
   // 清理 JSON 代码块
