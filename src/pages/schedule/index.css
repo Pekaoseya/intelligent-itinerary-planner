@@ -40,7 +40,8 @@ scroll-view {
 
 /* Card 防溢出 */
 .taro-card,
-[class*="card"] {
+[class*="card"],
+[class*="Card"] {
   max-width: 100%;
   overflow: hidden;
   box-sizing: border-box;
@@ -91,6 +92,60 @@ text {
 .detail-content * {
   max-width: 100%;
   box-sizing: border-box;
+}
+
+/* ============================================
+   增强防溢出样式 - 日程页面专用
+   ============================================ */
+
+/* 根容器防溢出 */
+.flex {
+  max-width: 100vw;
+}
+
+/* flex-col 子元素防溢出 */
+.flex-col {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* flex-row 子元素防溢出 */
+.flex-row {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* 列表项防溢出 */
+.list-item {
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* 任务列表容器 */
+.task-list {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* 按钮组防溢出 */
+.flex.gap-1 {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* 防止长文本撑开 */
+.break-all {
+  word-break: break-all;
+  max-width: 100%;
+}
+
+/* 标签容器防溢出 */
+.flex-wrap {
+  max-width: 100%;
+  overflow: hidden;
 }
 
 /* 思考图标旋转动画 */

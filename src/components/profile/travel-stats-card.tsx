@@ -141,7 +141,7 @@ export const TravelStatsCard: FC<TravelStatsCardProps> = ({ stats }) => {
                     style={{
                       width: '24px',
                       maxWidth: '32px',
-                      height: `${Math.max(height, 4)}px`,
+                      height: `${Math.max(height, 3.5)}px`,
                       backgroundColor: config?.color || '#999',
                     }}
                   />

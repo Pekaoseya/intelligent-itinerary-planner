@@ -35,7 +35,9 @@ const SchedulePage: FC = () => {
   // 获取屏幕信息
   const systemInfo = Taro.getSystemInfoSync()
   const headerHeight = 180
-  const scrollViewHeight = systemInfo.windowHeight - headerHeight
+  const tabBarHeight = 50  // TabBar 高度
+  const bottomBarHeight = 52  // 底部操作栏高度
+  const scrollViewHeight = systemInfo.windowHeight - headerHeight - tabBarHeight
 
   useDidShow(() => {
     fetchTasks()
@@ -172,43 +174,54 @@ const SchedulePage: FC = () => {
       {/* 任务列表 */}
       <ScrollView
         scrollY
-        className="p-3"
         style={{
           height: `${scrollViewHeight}px`,
           width: '100%',
           maxWidth: '100vw',
           overflowX: 'hidden',
           backgroundColor: '#f5f5f5',
-          paddingBottom: '80px'
+          boxSizing: 'border-box'
         }}
       >
-        {loading ? (
-          <View className="flex items-center justify-center py-12">
-            <Text className="text-gray-400">加载中...</Text>
-          </View>
-        ) : selectedDateTasks.length === 0 ? (
-          <View className="flex flex-col items-center justify-center py-12">
-            <Calendar className="text-gray-300 mb-3" size={48} />
-            <Text className="block text-gray-500 mb-2">这天暂无日程</Text>
-            <Button size="sm" onClick={() => Taro.switchTab({ url: '/pages/index/index' })}>
-              <Plus size={16} color="#fff" />
-              <Text className="text-sm text-white ml-1">添加日程</Text>
-            </Button>
-          </View>
-        ) : (
-          <View className="flex flex-col gap-3">
-            {selectedDateTasks.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onViewDetail={(t) => {
-                  setSelectedTask(t)
-                  setShowTaskDetail(true)
-                }}
-              />
-            ))}
-          </View>
-        )}
+        <View 
+          className="px-3 py-3"
+          style={{ 
+            width: '100%', 
+            maxWidth: '100vw', 
+            minWidth: 0,
+            overflow: 'hidden',
+            boxSizing: 'border-box',
+            paddingBottom: `${bottomBarHeight + tabBarHeight + 20}px`
+          }}
+        >
+          {loading ? (
+            <View className="flex items-center justify-center py-12">
+              <Text className="text-gray-400">加载中...</Text>
+            </View>
+          ) : selectedDateTasks.length === 0 ? (
+            <View className="flex flex-col items-center justify-center py-12">
+              <Calendar className="text-gray-300 mb-3" size={48} />
+              <Text className="block text-gray-500 mb-2">这天暂无日程</Text>
+              <Button size="sm" onClick={() => Taro.switchTab({ url: '/pages/index/index' })}>
+                <Plus size={16} color="#fff" />
+                <Text className="text-sm text-white ml-1">添加日程</Text>
+              </Button>
+            </View>
+          ) : (
+            <View className="flex flex-col gap-3" style={{ width: '100%', minWidth: 0 }}>
+              {selectedDateTasks.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  onViewDetail={(t) => {
+                    setSelectedTask(t)
+                    setShowTaskDetail(true)
+                  }}
+                />
+              ))}
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       {/* 任务详情弹窗 */}
@@ -229,11 +242,14 @@ const SchedulePage: FC = () => {
         className="bg-white border-t border-gray-200 px-4 py-2"
         style={{
           position: 'fixed',
-          bottom: 0,
+          bottom: tabBarHeight,
           left: 0,
           right: 0,
+          width: '100%',
+          maxWidth: '100vw',
           backgroundColor: '#fff',
-          zIndex: 100
+          zIndex: 100,
+          boxSizing: 'border-box'
         }}
       >
         <Button className="w-full" onClick={() => Taro.switchTab({ url: '/pages/index/index' })}>
