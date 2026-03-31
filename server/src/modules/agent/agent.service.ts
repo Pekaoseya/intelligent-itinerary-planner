@@ -16,6 +16,26 @@ interface UserLocation {
   name?: string
 }
 
+// 用户统计数据
+interface UserStats {
+  travel: {
+    total_trips: number
+    by_type: { taxi: number; train: number; flight: number }
+    top_locations: { name: string; count: number }[]
+    time_distribution: { morning: number; afternoon: number; evening: number; night: number }
+  } | null
+  schedule: {
+    total_tasks: number
+    completed: number
+    completion_rate: number
+    by_type: Record<string, number>
+  } | null
+  preferences: {
+    default_travel_type: string
+    reminder_minutes: number
+  } | null
+}
+
 interface AgentMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string
@@ -56,6 +76,91 @@ export class AgentService {
   constructor() {
     const config = new Config()
     this.llmClient = new LLMClient(config)
+  }
+
+  /**
+   * 获取用户统计数据（用于 RAG 增强）
+   */
+  private async getUserStats(userId: string): Promise<UserStats> {
+    try {
+      // 获取所有任务
+      const { data: tasks } = await this.supabase
+        .from('tasks')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      const allTasks = tasks || []
+
+      // 出行统计
+      const travelTasks = allTasks.filter(t => ['taxi', 'train', 'flight'].includes(t.type))
+      const travelByType = {
+        taxi: travelTasks.filter(t => t.type === 'taxi').length,
+        train: travelTasks.filter(t => t.type === 'train').length,
+        flight: travelTasks.filter(t => t.type === 'flight').length,
+      }
+
+      // 常去地点
+      const locationCount: Record<string, number> = {}
+      allTasks.forEach(task => {
+        if (task.destination_name) {
+          locationCount[task.destination_name] = (locationCount[task.destination_name] || 0) + 1
+        }
+      })
+      const topLocations = Object.entries(locationCount)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, count]) => ({ name, count }))
+
+      // 时段分布
+      const timeDistribution = { morning: 0, afternoon: 0, evening: 0, night: 0 }
+      allTasks.forEach(task => {
+        const date = new Date(task.scheduled_time)
+        const hour = date.getHours()
+        if (hour >= 6 && hour < 12) timeDistribution.morning++
+        else if (hour >= 12 && hour < 18) timeDistribution.afternoon++
+        else if (hour >= 18 && hour < 24) timeDistribution.evening++
+        else timeDistribution.night++
+      })
+
+      // 日程统计
+      const totalTasks = allTasks.length
+      const completedTasks = allTasks.filter(t => t.status === 'completed').length
+
+      // 类型分布
+      const typeDistribution: Record<string, number> = {}
+      allTasks.forEach(task => {
+        typeDistribution[task.type] = (typeDistribution[task.type] || 0) + 1
+      })
+
+      // 获取用户偏好
+      const { data: preferences } = await this.supabase
+        .from('user_preferences')
+        .select('*')
+        .eq('user_id', userId)
+        .single()
+
+      return {
+        travel: {
+          total_trips: travelTasks.length,
+          by_type: travelByType,
+          top_locations: topLocations,
+          time_distribution: timeDistribution,
+        },
+        schedule: {
+          total_tasks: totalTasks,
+          completed: completedTasks,
+          completion_rate: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
+          by_type: typeDistribution,
+        },
+        preferences: preferences ? {
+          default_travel_type: preferences.default_travel_type || 'taxi',
+          reminder_minutes: preferences.reminder_minutes || 30,
+        } : null,
+      }
+    } catch (error) {
+      this.logger.error('获取用户统计失败:', error)
+      return { travel: null, schedule: null, preferences: null }
+    }
   }
 
   /**
@@ -170,17 +275,18 @@ export class AgentService {
     onProgress({ type: 'start', data: { message: '正在思考...' } })
 
     // =============================================
-    // Step 1: 获取对话 ID 并加载历史消息
+    // Step 1: 获取对话 ID、历史消息、用户统计数据
     // =============================================
     const conversationId = await this.getOrCreateConversation(userId)
     const historyMessages = await this.loadRecentMessages(conversationId, 10)
+    const userStats = await this.getUserStats(userId)
     
     this.logger.log(`[Agent] 加载了 ${historyMessages.length} 条历史消息`)
 
     // =============================================
-    // Step 2: 构建系统提示词
+    // Step 2: 构建系统提示词（含用户偏好参考）
     // =============================================
-    const systemPrompt = this.buildSystemPrompt(userId, userLocation)
+    const systemPrompt = this.buildSystemPrompt(userId, userLocation, userStats)
 
     // 构建消息列表：系统提示 + 历史消息 + 当前消息
     const messages: AgentMessage[] = [
@@ -413,7 +519,7 @@ ${toolResultsSummary}
   /**
    * 构建系统提示词
    */
-  private buildSystemPrompt(userId: string, userLocation?: UserLocation): string {
+  private buildSystemPrompt(userId: string, userLocation?: UserLocation, userStats?: UserStats): string {
     const now = new Date()
     const today = now.toISOString().split('T')[0]
     const time = now.toTimeString().slice(0, 5)
@@ -437,6 +543,56 @@ ${toolResultsSummary}
 - 地点名称: ${userLocation.name || '当前位置'}`
       : '- 未获取到位置（使用默认位置：杭州西湖）'
 
+    // 用户统计数据 - 用于 RAG 增强
+    let userContextSection = ''
+    if (userStats) {
+      const parts: string[] = []
+      
+      // 出行偏好
+      if (userStats.travel && userStats.travel.total_trips > 0) {
+        const { travel } = userStats
+        const mostUsedType = Object.entries(travel.by_type)
+          .sort((a, b) => b[1] - a[1])[0]
+        const mostUsedTime = Object.entries(travel.time_distribution)
+          .sort((a, b) => b[1] - a[1])[0]
+        const timeNames: Record<string, string> = { morning: '上午', afternoon: '下午', evening: '晚间', night: '凌晨' }
+        
+        parts.push(`- 历史出行 ${travel.total_trips} 次，最常用 ${mostUsedType[0] === 'taxi' ? '打车' : mostUsedType[0] === 'train' ? '高铁' : '飞机'} (${mostUsedType[1]}次)`)
+        if (travel.top_locations.length > 0) {
+          parts.push(`- 常去地点: ${travel.top_locations.slice(0, 3).map(l => l.name).join('、')}`)
+        }
+        parts.push(`- 偏好出行时段: ${timeNames[mostUsedTime[0]] || mostUsedTime[0]}`)
+      }
+      
+      // 日程习惯
+      if (userStats.schedule && userStats.schedule.total_tasks > 0) {
+        const { schedule } = userStats
+        const mostType = Object.entries(schedule.by_type)
+          .sort((a, b) => b[1] - a[1])[0]
+        parts.push(`- 累计任务 ${schedule.total_tasks} 个，完成率 ${schedule.completion_rate}%`)
+        if (mostType) {
+          const typeNames: Record<string, string> = { meeting: '会议', taxi: '打车', train: '高铁', flight: '飞机', dining: '用餐', hotel: '酒店', todo: '事务' }
+          parts.push(`- 最常见任务类型: ${typeNames[mostType[0]] || mostType[0]} (${mostType[1]}次)`)
+        }
+      }
+      
+      // 用户偏好设置
+      if (userStats.preferences) {
+        const typeNames: Record<string, string> = { taxi: '打车', train: '高铁', flight: '飞机' }
+        parts.push(`- 默认出行方式: ${typeNames[userStats.preferences.default_travel_type] || userStats.preferences.default_travel_type}`)
+      }
+      
+      if (parts.length > 0) {
+        userContextSection = `
+## 用户偏好参考（基于历史数据）
+
+${parts.join('\n')}
+
+当用户未明确指定时，可参考以上偏好做推荐。
+`
+      }
+    }
+
     return `你是一个智能任务管理助手。你可以帮助用户管理各种类型的任务：打车、火车、飞机、会议、餐饮、酒店、事务等。
 
 ## 当前时间
@@ -444,187 +600,33 @@ ${toolResultsSummary}
 - 当前时间: ${time}
 - 明天: ${tomorrowStr} (${this.getWeekday(tomorrow)})
 - 后天: ${dayAfterTomorrowStr} (${this.getWeekday(dayAfterTomorrow)})
-
+${userContextSection}
 ## 用户当前位置
 ${locationInfo}
 
 当用户说"去XXX"但没有指定起点时，默认从用户当前位置出发。
 
-## 意图判断规则（核心）
+## 重要规则
 
-根据用户的表述判断意图：
-
-| 用户说法 | 意图 | 应调用工具 |
-|---------|------|-----------|
-| 安排一下/帮我安排/规划一下/计划一下 | 创建任务 | task_create |
-| 帮我订/预订/约一下 | 创建任务 | task_create |
-| 有什么安排/看看安排/查一下安排 | 查询任务 | task_query |
-| 安排了什么/有什么事 | 查询任务 | task_query |
-| 删掉/撤回/取消 | 删除任务 | task_delete |
-| 改一下/调整/修改 | 更新任务 | task_update |
+1. **不确定就问，不要猜**：如果用户的表述有歧义或缺少关键信息，直接询问用户
+2. **像人一样对话**：遇到不清楚的地方，自然地追问
+3. **时间冲突由工具自动检测**：创建任务时工具会自动检查
+4. **智能推算时间**：打车30分钟、火车提前30分钟、飞机提前2小时、会议1小时
 
 ## 日期参考
 
 - 今天 = ${today}
 - 明天 = ${tomorrowStr}
 - 后天 = ${dayAfterTomorrowStr}
-- 昨天 = ${yesterdayStr}
 
 ## 可用工具
 
 ${TOOL_NAMES.map(t => `- ${t.name}: ${t.description}`).join('\n')}
 
-### task_create 参数
-- title (必需): 任务标题
-- type (必需): taxi | train | flight | meeting | dining | hotel | todo | other
-- scheduled_time (必需): 计划时间，ISO格式
-- location_name: 地点名称（起点）
-- destination_name: 目的地（出行类）
-- metadata: 类型特定数据
-
-### task_delete 参数
-- task_id: 直接删除指定ID的任务
-- filter: 按条件删除
-  - type: 按类型
-  - date: 按日期 (YYYY-MM-DD)
-  - date_range: 按日期范围 { start, end }
-  - keyword: 按关键词
-  - expired: true 只删除过期的
-  - all: true 删除所有
-- confirm: true 确认删除
-
-### task_update 参数
-- task_id: 任务ID
-- filter: { keyword: "关键词" } 用于匹配任务
-- updates: 要更新的字段
-
-### task_query 参数
-- filter: 筛选条件
-  - date: 某天 (YYYY-MM-DD)
-  - date_range: 日期范围 { start, end }
-  - type: 类型
-  - keyword: 关键词
-- limit: 返回数量
-
 ## 响应格式
 
-以 JSON 格式回复：
-
-\`\`\`json
-{
-  "reasoning": "简要思考过程",
-  "tool_calls": [
-    {
-      "id": "call_1",
-      "name": "工具名称",
-      "arguments": { 工具参数 }
-    }
-  ],
-  "content": "如果不调用工具，这里是对用户的回复"
-}
-\`\`\`
-
-## 重要规则
-
-1. **不确定就问，不要猜**：如果用户的表述有歧义或缺少关键信息（如地点、时间、具体事项），直接询问用户，不要自行推测意图
-2. **像人一样对话**：遇到不清楚的地方，自然地追问，比如"您想去哪里？""具体是什么时间？""是开会还是吃饭？"
-3. **时间冲突由工具自动检测**：创建任务时，工具会自动检查冲突并返回提示
-3. **智能推算时间**：
-   - 打车：市内30分钟，跨区1小时
-   - 火车：提前30分钟到站
-   - 飞机：提前2小时到机场
-   - 会议：默认1小时
-   - 用餐：午餐12:00，晚餐18:00
-
-## 示例
-
-用户: "安排一下后天北京的行程"
-\`\`\`json
-{
-  "reasoning": "用户说'安排一下'，意图是创建新行程。后天 = ${dayAfterTomorrowStr}，目的地北京。规划完整行程。",
-  "tool_calls": [
-    { "id": "call_1", "name": "task_create", "arguments": { "title": "高铁去北京", "type": "train", "scheduled_time": "${dayAfterTomorrowStr}T08:00:00", "destination_name": "北京南站" } },
-    { "id": "call_2", "name": "task_create", "arguments": { "title": "入住酒店", "type": "hotel", "scheduled_time": "${dayAfterTomorrowStr}T14:00:00", "location_name": "北京市中心" } }
-  ]
-}
-\`\`\`
-
-用户: "明天下午3点开会"
-\`\`\`json
-{
-  "reasoning": "用户说明天下午3点开会，意图是创建会议任务。明天 = ${tomorrowStr}。",
-  "tool_calls": [
-    { "id": "call_1", "name": "task_create", "arguments": { "title": "会议", "type": "meeting", "scheduled_time": "${tomorrowStr}T15:00:00" } }
-  ]
-}
-\`\`\`
-
-用户: "后天有什么安排"
-\`\`\`json
-{
-  "reasoning": "用户问'有什么安排'，意图是查询已有任务。后天 = ${dayAfterTomorrowStr}。",
-  "tool_calls": [
-    { "id": "call_1", "name": "task_query", "arguments": { "filter": { "date": "${dayAfterTomorrowStr}" } } }
-  ]
-}
-\`\`\`
-
-用户: "这周末有什么事"
-\`\`\`json
-{
-  "reasoning": "用户问'有什么事'，意图是查询任务。这周末 = 本周六和周日。",
-  "tool_calls": [
-    { "id": "call_1", "name": "task_query", "arguments": { "filter": { "date_range": { "start": "周六日期", "end": "周日日期" } } } }
-  ]
-}
-\`\`\`
-
-用户: "删除明天所有安排"
-\`\`\`json
-{
-  "reasoning": "用户想删除明天所有任务。明天 = ${tomorrowStr}。",
-  "tool_calls": [
-    { "id": "call_1", "name": "task_delete", "arguments": { "filter": { "date": "${tomorrowStr}" }, "confirm": false } }
-  ]
-}
-\`\`\`
-
-用户: "帮我规划下周去三亚旅游"
-\`\`\`json
-{
-  "reasoning": "用户说'帮我规划'，意图是创建旅游行程。下周 = 下周一到周日，目的地三亚。创建完整的旅行任务。",
-  "tool_calls": [
-    { "id": "call_1", "name": "task_create", "arguments": { "title": "飞往三亚", "type": "flight", "scheduled_time": "下周一日期T10:00:00", "destination_name": "三亚凤凰机场" } },
-    { "id": "call_2", "name": "task_create", "arguments": { "title": "入住三亚酒店", "type": "hotel", "scheduled_time": "下周一日期T14:00:00" } }
-  ]
-}
-\`\`\`
-
-用户: "把明天的会议改到后天"
-\`\`\`json
-{
-  "reasoning": "用户想修改任务时间。明天 = ${tomorrowStr}，后天 = ${dayAfterTomorrowStr}。先用关键词找到会议任务，再更新时间。",
-  "tool_calls": [
-    { "id": "call_1", "name": "task_update", "arguments": { "filter": { "keyword": "会议" }, "updates": { "scheduled_time": "${dayAfterTomorrowStr}T15:00:00" } } }
-  ]
-}
-\`\`\`
-
-用户: "那天的安排删掉"
-\`\`\`json
-{
-  "reasoning": "用户说'那天'但没有指明具体日期，无法确定是哪一天。",
-  "content": "请问您说的是哪一天呢？可以说具体日期，比如'明天'、'后天'、或者'3月15号'。"
-}
-\`\`\`
-
-用户: "帮我叫个车去机场"
-\`\`\`json
-{
-  "reasoning": "用户想叫车去机场，但没有说明时间。",
-  "content": "好的，我帮您叫车去机场。请问您现在在哪里出发？什么时候用车？"
-}
-\`\`\``
+以 JSON 格式回复，包含 reasoning（思考过程）、tool_calls（工具调用）、content（直接回复用户）。
+\``
   }
 
   /**
