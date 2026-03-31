@@ -8,7 +8,7 @@ import { Settings, Car, Bell } from 'lucide-react-taro'
 import Taro from '@tarojs/taro'
 import { Card, CardContent } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
-import { Network } from '@/network'
+import { statsService } from '@/services'
 import type { UserPreferences } from '@/types'
 import { TRAVEL_TYPE_CONFIG } from '@/types'
 
@@ -21,16 +21,11 @@ export const PreferenceSettings: FC<PreferenceSettingsProps> = ({ preferences, o
   // 更新偏好设置
   const updatePreferences = async (key: keyof UserPreferences, value: string | number | boolean) => {
     try {
-      const params = new URLSearchParams()
-      params.append(key, String(value))
-      await Network.request({
-        url: `/api/stats/preferences/update?${params.toString()}`,
-        method: 'GET',
-      })
+      await statsService.updatePreferences({ [key]: value })
       onUpdate({ ...preferences, [key]: value })
       Taro.showToast({ title: '已更新', icon: 'success' })
     } catch (error) {
-      console.error('更新偏好失败:', error)
+      console.error('[PreferenceSettings] 更新偏好失败:', error)
       Taro.showToast({ title: '更新失败', icon: 'error' })
     }
   }

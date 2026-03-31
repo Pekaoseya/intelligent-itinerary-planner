@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 import type { FC } from 'react'
 import Taro, { useDidShow } from '@tarojs/taro'
 import { Calendar, Plus } from 'lucide-react-taro'
-import { Network } from '@/network'
+import { taskService } from '@/services'
 import { Button } from '@/components/ui/button'
 import { WeekCalendar, TaskCard, TaskDetailModal } from '@/components/task'
 import type { Task } from '@/types'
@@ -45,12 +45,11 @@ const SchedulePage: FC = () => {
   const fetchTasks = async () => {
     try {
       setLoading(true)
-      const res = await Network.request({ url: '/api/tasks', method: 'GET' })
-      const taskList: Task[] = res.data?.data || []
+      const taskList = await taskService.getTasks()
       taskList.sort((a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime())
       setTasks(taskList)
     } catch (error) {
-      console.error('获取任务失败:', error)
+      console.error('[Schedule] 获取任务失败:', error)
     } finally {
       setLoading(false)
     }
@@ -79,16 +78,13 @@ const SchedulePage: FC = () => {
   // 完成任务
   const completeTask = async (taskId: string) => {
     try {
-      await Network.request({
-        url: `/api/tasks/${taskId}/complete`,
-        method: 'GET',
-      })
+      await taskService.completeTask(taskId)
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'completed' as const } : t))
       Taro.showToast({ title: '已完成', icon: 'success' })
       setShowTaskDetail(false)
       setSelectedTask(null)
     } catch (error) {
-      console.error('完成失败:', error)
+      console.error('[Schedule] 完成失败:', error)
     }
   }
 
@@ -101,16 +97,13 @@ const SchedulePage: FC = () => {
       success: async (res) => {
         if (res.confirm) {
           try {
-            await Network.request({
-              url: `/api/tasks/${task.id}`,
-              method: 'DELETE',
-            })
+            await taskService.deleteTask(task.id)
             setTasks(prev => prev.filter(t => t.id !== task.id))
             setShowTaskDetail(false)
             setSelectedTask(null)
             Taro.showToast({ title: '已删除', icon: 'success' })
           } catch (error) {
-            console.error('删除失败:', error)
+            console.error('[Schedule] 删除失败:', error)
             Taro.showToast({ title: '删除失败', icon: 'error' })
           }
         }

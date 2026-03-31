@@ -5,7 +5,7 @@
 
 import { useState, useCallback } from 'react'
 import Taro from '@tarojs/taro'
-import { Network } from '@/network'
+import { mapService } from '@/services'
 import type { UserLocation } from '@/types'
 import { DEFAULT_LOCATION } from '@/types'
 
@@ -27,36 +27,27 @@ export function useLocation(): UseLocationResult {
   const fetchLocation = useCallback(async () => {
     setLoading(true)
     setError(null)
-    console.log('[定位] 开始获取...')
+    console.log('[useLocation] 开始获取...')
 
     try {
       const isWeapp = Taro.getEnv() === Taro.ENV_TYPE.WEAPP
 
       if (isWeapp) {
         const locationData = await Taro.getLocation({ type: 'gcj02' })
-        console.log('[定位] 小程序获取成功:', locationData.latitude, locationData.longitude)
+        console.log('[useLocation] 小程序获取成功:', locationData.latitude, locationData.longitude)
 
-        try {
-          const res = await Network.request({
-            url: '/api/map/reverse-geocode',
-            method: 'GET',
-            data: { lng: locationData.longitude, lat: locationData.latitude },
-          })
-          const addressName = res.data?.data?.address
-          setLocation({
-            latitude: locationData.latitude,
-            longitude: locationData.longitude,
-            name: addressName || `${locationData.latitude.toFixed(4)}, ${locationData.longitude.toFixed(4)}`,
-          })
-          setError(null)
-        } catch (geocodeError) {
-          console.warn('[定位] 逆地理编码失败:', geocodeError)
-          setLocation({
-            latitude: locationData.latitude,
-            longitude: locationData.longitude,
-            name: `${locationData.latitude.toFixed(4)}, ${locationData.longitude.toFixed(4)}`,
-          })
-        }
+        // 使用 MapService 获取地址
+        const addressName = await mapService.getAddressByLocation(
+          locationData.longitude,
+          locationData.latitude
+        )
+        
+        setLocation({
+          latitude: locationData.latitude,
+          longitude: locationData.longitude,
+          name: addressName,
+        })
+        setError(null)
       } else {
         // H5 端
         if (navigator.geolocation) {
@@ -68,11 +59,11 @@ export function useLocation(): UseLocationResult {
                   longitude: pos.coords.longitude,
                   name: '当前位置',
                 })
-                console.log('[定位] H5 获取成功:', pos.coords.latitude, pos.coords.longitude)
+                console.log('[useLocation] H5 获取成功:', pos.coords.latitude, pos.coords.longitude)
                 resolve()
               },
               (err) => {
-                console.warn('[定位] H5 获取失败:', err)
+                console.warn('[useLocation] H5 获取失败:', err)
                 // 使用默认位置
                 setLocation(DEFAULT_LOCATION)
                 setError('定位失败，使用默认位置')
@@ -87,7 +78,7 @@ export function useLocation(): UseLocationResult {
         }
       }
     } catch (err) {
-      console.error('[定位] 获取失败:', err)
+      console.error('[useLocation] 获取失败:', err)
       setLocation(DEFAULT_LOCATION)
       setError('定位失败，使用默认位置')
     } finally {

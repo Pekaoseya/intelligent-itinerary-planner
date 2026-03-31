@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import type { FC } from 'react'
 import Taro from '@tarojs/taro'
 import { User } from 'lucide-react-taro'
-import { Network } from '@/network'
+import { statsService } from '@/services'
 import { TravelStatsCard, ScheduleStatsCard, PreferenceSettings, TrendChart } from '@/components/profile'
 import type { TravelStats, ScheduleStats, TrendStats, UserPreferences } from '@/types'
 import './index.css'
@@ -37,14 +37,14 @@ const ProfilePage: FC = () => {
   const fetchStats = async () => {
     try {
       setLoading(true)
-      const res = await Network.request({ url: '/api/stats', method: 'GET' })
-      if (res.data?.code === 200) {
-        setTravelStats(res.data.data.travel)
-        setScheduleStats(res.data.data.schedule)
-        setTrendStats(res.data.data.trend)
+      const data = await statsService.getStats()
+      if (data) {
+        setTravelStats((data as any).travel)
+        setScheduleStats((data as any).schedule)
+        setTrendStats((data as any).trend)
       }
     } catch (error) {
-      console.error('获取统计失败:', error)
+      console.error('[Profile] 获取统计失败:', error)
     } finally {
       setLoading(false)
     }
@@ -53,12 +53,12 @@ const ProfilePage: FC = () => {
   // 获取偏好设置
   const fetchPreferences = async () => {
     try {
-      const res = await Network.request({ url: '/api/stats/preferences', method: 'GET' })
-      if (res.data?.code === 200) {
-        setPreferences(res.data.data)
+      const data = await statsService.getPreferences()
+      if (data) {
+        setPreferences(data as UserPreferences)
       }
     } catch (error) {
-      console.error('获取偏好失败:', error)
+      console.error('[Profile] 获取偏好失败:', error)
     }
   }
 

@@ -5,7 +5,7 @@
 
 import { useCallback } from 'react'
 import Taro from '@tarojs/taro'
-import { Network } from '@/network'
+import { taskService } from '@/services'
 import { useConfirmStore, type ConfirmType } from '@/stores/confirmStore'
 import { useChatStore } from '@/stores/chatStore'
 
@@ -60,13 +60,9 @@ export function useConfirm(options: UseConfirmOptions = {}): UseConfirmResult {
       setLoading(true)
       console.log('[useConfirm] 批量创建任务:', pendingTasks.length)
       
-      const res = await Network.request({
-        url: '/api/tasks/batch',
-        method: 'POST',
-        data: { tasks: pendingTasks }
-      })
+      const result = await taskService.batchCreateTasks(pendingTasks)
+      const createdCount = result.createdCount || pendingTasks.length
       
-      const createdCount = res.data?.data?.createdCount || pendingTasks.length
       Taro.showToast({ title: `成功创建 ${createdCount} 个日程`, icon: 'success' })
       
       addMessage({
@@ -95,13 +91,9 @@ export function useConfirm(options: UseConfirmOptions = {}): UseConfirmResult {
       setLoading(true)
       console.log('[useConfirm] 批量删除任务:', pendingDeleteIds.length)
       
-      const res = await Network.request({
-        url: '/api/tasks/batch-delete',
-        method: 'POST',
-        data: { taskIds: pendingDeleteIds }
-      })
+      const result = await taskService.batchDeleteTasks(pendingDeleteIds)
+      const deletedCount = result.deletedCount || pendingDeleteIds.length
       
-      const deletedCount = res.data?.data?.deletedCount || pendingDeleteIds.length
       Taro.showToast({ title: `已删除 ${deletedCount} 个日程`, icon: 'success' })
       
       addMessage({
@@ -130,11 +122,7 @@ export function useConfirm(options: UseConfirmOptions = {}): UseConfirmResult {
       setLoading(true)
       console.log('[useConfirm] 更新任务:', updatedTask.title)
       
-      await Network.request({
-        url: `/api/tasks/${(updatedTask as any).id}`,
-        method: 'PUT',
-        data: updatedTask
-      })
+      await taskService.updateTask((updatedTask as any).id, updatedTask)
       
       Taro.showToast({ title: '修改成功', icon: 'success' })
       
