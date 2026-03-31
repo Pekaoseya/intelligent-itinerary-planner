@@ -8,7 +8,10 @@
     "dev": "nest start --watch",
     "start": "nest start",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main"
+    "start:prod": "node dist/main",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.958.0",
@@ -35,8 +38,11 @@
     "@nestjs/schematics": "^10.2.3",
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "5.0.6",
+    "@types/jest": "^30.0.0",
     "@types/node": "^22.10.2",
     "drizzle-kit": "^0.31.8",
+    "jest": "^30.3.0",
+    "ts-jest": "^29.4.6",
     "typescript": "^5.7.2"
   }
 }
