@@ -49,7 +49,91 @@ export class TaskController {
   }
 
   /**
-   * 创建任务
+   * 批量创建任务（用户确认后调用）
+   */
+  @Post('batch')
+  async batchCreateTasks(@Body() body: { tasks: any[] }) {
+    try {
+      if (!body.tasks || !Array.isArray(body.tasks) || body.tasks.length === 0) {
+        return { code: 400, msg: '请提供任务列表' }
+      }
+
+      const results: any[] = []
+      const errors: string[] = []
+
+      for (const taskData of body.tasks) {
+        try {
+          const task = await this.taskService.createTask('default-user', taskData)
+          results.push(task)
+        } catch (err) {
+          errors.push(`创建「${taskData.title}」失败: ${err.message}`)
+        }
+      }
+
+      if (errors.length > 0 && results.length === 0) {
+        return { code: 500, msg: '批量创建失败', error: errors.join('; ') }
+      }
+
+      return {
+        code: 200,
+        msg: errors.length > 0 
+          ? `成功创建 ${results.length} 个任务，${errors.length} 个失败`
+          : `成功创建 ${results.length} 个任务`,
+        data: {
+          created: results,
+          createdCount: results.length,
+          errors: errors.length > 0 ? errors : undefined,
+        },
+      }
+    } catch (error) {
+      return {
+        code: 500,
+        msg: '批量创建失败',
+        error: error.message,
+      }
+    }
+  }
+
+  /**
+   * 批量删除任务（用户确认后调用）
+   */
+  @Post('batch-delete')
+  async batchDeleteTasks(@Body() body: { taskIds: string[] }) {
+    try {
+      if (!body.taskIds || !Array.isArray(body.taskIds) || body.taskIds.length === 0) {
+        return { code: 400, msg: '请提供任务ID列表' }
+      }
+
+      const deletedTasks: any[] = []
+
+      for (const taskId of body.taskIds) {
+        const task = await this.taskRepository.findById(taskId)
+        if (task) {
+          await this.taskRepository.logEvent(taskId, 'default-user', 'deleted', { task })
+          await this.taskRepository.delete(taskId)
+          deletedTasks.push(task)
+        }
+      }
+
+      return {
+        code: 200,
+        msg: `成功删除 ${deletedTasks.length} 个任务`,
+        data: {
+          deletedCount: deletedTasks.length,
+          deletedTasks,
+        },
+      }
+    } catch (error) {
+      return {
+        code: 500,
+        msg: '批量删除失败',
+        error: error.message,
+      }
+    }
+  }
+
+  /**
+   * 创建单个任务
    */
   @Post()
   async createTask(@Body() taskData: any) {
@@ -107,7 +191,7 @@ export class TaskController {
   }
 
   /**
-   * 删除任务
+   * 删除单个任务
    */
   @Delete(':id')
   async deleteTask(@Param('id') id: string) {

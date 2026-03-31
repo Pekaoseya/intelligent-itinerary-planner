@@ -1,5 +1,10 @@
 /**
  * 任务工具执行器
+ * 
+ * 设计原则：
+ * - task_create: 只生成任务参数预览，不写入数据库
+ * - task_delete: 只返回待删除任务列表，不真正删除
+ * - 用户确认后，通过批量API真正执行操作
  */
 
 import { getSupabaseClient } from '../../../storage/database/supabase-client'
@@ -23,7 +28,7 @@ import type { UserLocation, TaskType, RouteInfo, Coordinate } from './types'
 const supabase = getSupabaseClient()
 
 // =============================================
-// 任务创建
+// 任务创建预览（不写入数据库）
 // =============================================
 
 export async function executeTaskCreate(
@@ -33,6 +38,14 @@ export async function executeTaskCreate(
 ): Promise<ToolResult> {
   const { title, type, scheduled_time, end_time, location_name, location_address, destination_name, destination_address, metadata } = args
 
+  // 参数校验
+  if (!title || !type || !scheduled_time) {
+    return {
+      success: false,
+      error: '缺少必要参数：title, type, scheduled_time',
+    }
+  }
+
   const scheduledDate = new Date(scheduled_time)
   const now = new Date()
   const isExpired = scheduledDate < now
@@ -41,21 +54,19 @@ export async function executeTaskCreate(
   const estimatedDuration = estimateTaskDuration(type as TaskType, undefined, metadata)
   const conflictCheck = await checkTimeConflict(userId, scheduledDate, estimatedDuration)
 
-  if (conflictCheck.hasConflict) {
+  if (conflictCheck.hasConflict && conflictCheck.severity === 'error') {
     const conflictDetails = conflictCheck.conflicts.map(c => {
       const timeStr = formatTime(c.scheduled_time)
       return `"${c.title}"（${timeStr}，重叠${c.overlap_minutes}分钟）`
     }).join('、')
 
-    if (conflictCheck.severity === 'error') {
-      return {
-        success: false,
-        error: `时间冲突：该时间段与以下任务重叠：${conflictDetails}`,
-        data: {
-          conflicts: conflictCheck.conflicts,
-          suggestion: '请选择其他时间，或先取消/调整冲突的任务',
-        },
-      }
+    return {
+      success: false,
+      error: `时间冲突：该时间段与以下任务重叠：${conflictDetails}`,
+      data: {
+        conflicts: conflictCheck.conflicts,
+        suggestion: '请选择其他时间，或先取消/调整冲突的任务',
+      },
     }
   }
 
@@ -142,8 +153,8 @@ export async function executeTaskCreate(
     validationWarnings: validationWarnings.length > 0 ? validationWarnings : undefined,
   }
 
-  const taskData = {
-    user_id: userId,
+  // 生成预览数据（不写入数据库）
+  const previewTask = {
     title,
     type,
     scheduled_time,
@@ -159,15 +170,13 @@ export async function executeTaskCreate(
     metadata: finalMetadata,
     status: isExpired ? 'expired' : 'pending',
     is_expired: isExpired,
+    // 冲突警告（如果有）
+    conflictWarning: conflictCheck.hasConflict && conflictCheck.severity === 'warning' 
+      ? `注意：该时间段与现有任务有轻微重叠` 
+      : undefined,
   }
 
-  const { data, error } = await supabase.from('tasks').insert(taskData).select().single()
-
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  // 更新多段行程状态
+  // 更新多段行程状态（用于后续任务的起点）
   if (actualDestName && finalDestCoords?.latitude && finalDestCoords?.longitude) {
     setLastDestination({
       name: actualDestName,
@@ -176,23 +185,23 @@ export async function executeTaskCreate(
     })
   }
 
-  // 记录事件
-  await supabase.from('task_events').insert({
-    task_id: data.id,
-    user_id: userId,
-    event_type: 'created',
-    reasoning: `创建${type}类型任务: ${title}`,
-  })
-
-  let message = isExpired
-    ? `已创建任务「${title}」，但该时间已过期，状态标记为过期`
-    : `已创建任务「${title}」`
-
+  let message = `准备创建任务「${title}」`
+  if (isExpired) {
+    message += '（该时间已过期）'
+  }
   if (validationWarnings.length > 0) {
     message += `。提示：${validationWarnings.join('；')}`
   }
 
-  return { success: true, data, message }
+  // 返回预览数据，标记为待确认
+  return { 
+    success: true, 
+    data: { 
+      preview: true,  // 标记为预览模式
+      task: previewTask,
+    }, 
+    message 
+  }
 }
 
 // =============================================
@@ -236,12 +245,13 @@ async function getRouteByType(
 }
 
 // =============================================
-// 任务删除
+// 任务删除预览（不真正删除）
 // =============================================
 
 export async function executeTaskDelete(args: any, userId: string): Promise<ToolResult> {
-  const { task_id, filter, confirm } = args
+  const { task_id, filter } = args
 
+  // 按ID删除单个任务
   if (task_id) {
     const { data: task, error: findError } = await supabase
       .from('tasks')
@@ -254,19 +264,20 @@ export async function executeTaskDelete(args: any, userId: string): Promise<Tool
       return { success: false, error: '未找到该任务' }
     }
 
-    await supabase.from('task_events').insert({
-      task_id: task.id,
-      user_id: userId,
-      event_type: 'cancelled',
-      reasoning: `用户删除任务: ${task.title}`,
-    })
-
-    const { error } = await supabase.from('tasks').delete().eq('id', task_id)
-    if (error) return { success: false, error: error.message }
-
-    return { success: true, data: { deleted: task }, message: `已删除任务「${task.title}」` }
+    // 返回预览，不真正删除
+    return { 
+      success: true, 
+      data: { 
+        preview: true,
+        deleteType: 'single',
+        tasks: [task],
+        count: 1,
+      }, 
+      message: `准备删除任务「${task.title}」` 
+    }
   }
 
+  // 按条件批量删除
   if (filter) {
     let query = supabase.from('tasks').select('*').eq('user_id', userId)
 
@@ -286,45 +297,27 @@ export async function executeTaskDelete(args: any, userId: string): Promise<Tool
 
     const { data: tasks, error: findError } = await query
     if (findError) return { success: false, error: findError.message }
-    if (!tasks?.length) return { success: true, data: { count: 0 }, message: '没有找到符合条件的任务' }
+    if (!tasks?.length) return { success: true, data: { preview: true, tasks: [], count: 0 }, message: '没有找到符合条件的任务' }
 
-    if (tasks.length === 1) {
-      const task = tasks[0]
-      await supabase.from('task_events').insert({
-        task_id: task.id,
-        user_id: userId,
-        event_type: 'cancelled',
-        reasoning: `用户删除任务: ${task.title}`,
-      })
-      const { error: deleteError } = await supabase.from('tasks').delete().eq('id', task.id)
-      if (deleteError) return { success: false, error: deleteError.message }
-      return { success: true, data: { deleted: task }, message: `已删除任务「${task.title}」` }
+    // 返回预览，不真正删除
+    return { 
+      success: true, 
+      data: { 
+        preview: true,
+        deleteType: 'batch',
+        tasks: tasks,
+        count: tasks.length,
+        taskIds: tasks.map(t => t.id),
+      }, 
+      message: `找到 ${tasks.length} 个任务待删除` 
     }
-
-    if (!confirm) {
-      return { success: true, data: { needConfirm: true, tasks, count: tasks.length }, message: `找到 ${tasks.length} 个任务，请确认是否全部删除` }
-    }
-
-    for (const task of tasks) {
-      await supabase.from('task_events').insert({
-        task_id: task.id,
-        user_id: userId,
-        event_type: 'cancelled',
-        reasoning: `批量删除: ${task.title}`,
-      })
-    }
-
-    const { error: deleteError } = await supabase.from('tasks').delete().in('id', tasks.map(t => t.id))
-    if (deleteError) return { success: false, error: deleteError.message }
-
-    return { success: true, data: { count: tasks.length }, message: `已删除 ${tasks.length} 个任务` }
   }
 
   return { success: false, error: '请提供 task_id 或 filter 参数' }
 }
 
 // =============================================
-// 任务更新
+// 任务更新（暂时保留原有逻辑，后续可改为预览模式）
 // =============================================
 
 export async function executeTaskUpdate(args: any, userId: string): Promise<ToolResult> {
@@ -348,33 +341,27 @@ export async function executeTaskUpdate(args: any, userId: string): Promise<Tool
     return { success: false, error: '该任务已过期，无法修改' }
   }
 
-  const updateData: any = { updated_at: new Date().toISOString() }
-  if (updates.title) updateData.title = updates.title
-  if (updates.scheduled_time) {
-    updateData.scheduled_time = updates.scheduled_time
-    updateData.is_expired = new Date(updates.scheduled_time) < new Date()
-    if (updateData.is_expired) updateData.status = 'expired'
+  // 返回预览数据
+  const updatedTask = {
+    ...targetTask,
+    ...updates,
+    updated_at: new Date().toISOString(),
   }
-  if (updates.location_name) updateData.location_name = updates.location_name
-  if (updates.status) updateData.status = updates.status
-  if (updates.metadata) updateData.metadata = { ...targetTask.metadata, ...updates.metadata }
 
-  const { data: updatedTask, error } = await supabase.from('tasks').update(updateData).eq('id', targetTask.id).select().single()
-  if (error) return { success: false, error: error.message }
-
-  await supabase.from('task_events').insert({
-    task_id: targetTask.id,
-    user_id: userId,
-    event_type: 'updated',
-    changes: updates,
-    reasoning: `更新任务: ${JSON.stringify(updates)}`,
-  })
-
-  return { success: true, data: updatedTask, message: `已更新任务「${updatedTask.title}」` }
+  return { 
+    success: true, 
+    data: { 
+      preview: true,
+      originalTask: targetTask,
+      updatedTask: updatedTask,
+      updates: updates,
+    }, 
+    message: `准备更新任务「${targetTask.title}」` 
+  }
 }
 
 // =============================================
-// 任务查询
+// 任务查询（保留原有逻辑）
 // =============================================
 
 export async function executeTaskQuery(args: any, userId: string): Promise<ToolResult> {
@@ -405,7 +392,7 @@ export async function executeTaskQuery(args: any, userId: string): Promise<ToolR
 }
 
 // =============================================
-// 任务完成
+// 任务完成（保留原有逻辑）
 // =============================================
 
 export async function executeTaskComplete(args: any, userId: string): Promise<ToolResult> {
@@ -441,4 +428,107 @@ export async function executeTaskComplete(args: any, userId: string): Promise<To
   })
 
   return { success: true, data: updatedTask, message: `已完成任务「${targetTask.title}」` }
+}
+
+// =============================================
+// 批量创建任务（供确认后调用）
+// =============================================
+
+export async function executeBatchCreateTasks(
+  userId: string,
+  tasks: any[]
+): Promise<ToolResult> {
+  const results: any[] = []
+  const errors: string[] = []
+
+  for (const taskData of tasks) {
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert({
+        user_id: userId,
+        ...taskData,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      errors.push(`创建「${taskData.title}」失败: ${error.message}`)
+    } else {
+      results.push(data)
+      
+      // 记录事件
+      await supabase.from('task_events').insert({
+        task_id: data.id,
+        user_id: userId,
+        event_type: 'created',
+        reasoning: `创建${taskData.type}类型任务: ${taskData.title}`,
+      })
+    }
+  }
+
+  if (errors.length > 0 && results.length === 0) {
+    return { success: false, error: errors.join('; ') }
+  }
+
+  return {
+    success: true,
+    data: {
+      created: results,
+      createdCount: results.length,
+      errors: errors.length > 0 ? errors : undefined,
+    },
+    message: errors.length > 0 
+      ? `成功创建 ${results.length} 个任务，${errors.length} 个失败`
+      : `成功创建 ${results.length} 个任务`,
+  }
+}
+
+// =============================================
+// 批量删除任务（供确认后调用）
+// =============================================
+
+export async function executeBatchDeleteTasks(
+  userId: string,
+  taskIds: string[]
+): Promise<ToolResult> {
+  if (!taskIds || taskIds.length === 0) {
+    return { success: false, error: '请提供要删除的任务ID' }
+  }
+
+  // 查询任务
+  const { data: tasks, error: findError } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('user_id', userId)
+    .in('id', taskIds)
+
+  if (findError) return { success: false, error: findError.message }
+  if (!tasks?.length) return { success: false, error: '未找到任务' }
+
+  // 记录删除事件
+  for (const task of tasks) {
+    await supabase.from('task_events').insert({
+      task_id: task.id,
+      user_id: userId,
+      event_type: 'cancelled',
+      reasoning: `用户删除任务: ${task.title}`,
+    })
+  }
+
+  // 执行删除
+  const { error: deleteError } = await supabase
+    .from('tasks')
+    .delete()
+    .in('id', taskIds)
+
+  if (deleteError) return { success: false, error: deleteError.message }
+
+  return {
+    success: true,
+    data: {
+      deletedCount: tasks.length,
+      deletedTasks: tasks,
+    },
+    message: `已删除 ${tasks.length} 个任务`,
+  }
 }

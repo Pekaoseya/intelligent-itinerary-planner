@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { streamingClient, type StreamConnection } from '@/streaming'
 import { ConfirmModal } from '@/components/confirmation'
-import type { PendingTask, ConfirmType } from '@/components/confirmation'
+import type { PendingTask } from '@/components/confirmation'
 import './index.css'
 
 // =============================================
@@ -57,12 +57,18 @@ interface MessageData {
   needConfirm?: boolean
   // 新增确认相关字段
   needConfirmation?: boolean
-  confirmType?: ConfirmType
-  pendingTask?: PendingTask
+  confirmType?: 'batch_add' | 'batch_delete' | 'modify'
+  // 批量创建
+  pendingTasks?: PendingTask[]      // 待创建的任务列表
+  pendingCount?: number             // 待创建任务数量
+  // 批量删除
+  pendingDeleteTasks?: Task[]       // 待删除的任务列表
+  pendingDeleteIds?: string[]       // 待删除的任务ID列表
+  pendingDeleteCount?: number       // 待删除任务数量
+  // 单个任务更新
   originalTask?: PendingTask
-  // 批量创建的任务 ID，用于取消时批量删除
-  createdTaskIds?: string[]
-  createdCount?: number
+  updatedTask?: PendingTask
+  updates?: any
 }
 
 interface Message {
@@ -98,13 +104,16 @@ const Index: FC = () => {
   const [locationError, setLocationError] = useState<string | null>(null)
   
   // ========== 新增：确认弹窗状态 ==========
-  const [pendingTask, setPendingTask] = useState<PendingTask | null>(null)
-  const [originalTask, setOriginalTask] = useState<PendingTask | null>(null)
-  const [confirmType, setConfirmType] = useState<ConfirmType>('add')
+  const [confirmType, setConfirmType] = useState<'batch_add' | 'batch_delete' | 'modify'>('batch_add')
   const [showConfirmModal, setShowConfirmModal] = useState(false)
-  // 批量创建的任务 ID，用于取消时批量删除
-  const [createdTaskIds, setCreatedTaskIds] = useState<string[]>([])
-  const [createdCount, setCreatedCount] = useState<number>(0)
+  // 批量创建
+  const [pendingTasks, setPendingTasks] = useState<PendingTask[]>([])
+  // 批量删除
+  const [pendingDeleteTasks, setPendingDeleteTasks] = useState<Task[]>([])
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([])
+  // 单个任务更新
+  const [originalTask, setOriginalTask] = useState<PendingTask | null>(null)
+  const [updatedTask, setUpdatedTask] = useState<PendingTask | null>(null)
   
   // 保存当前流式连接，用于取消
   const connectionRef = useRef<StreamConnection | null>(null)
@@ -271,7 +280,7 @@ const Index: FC = () => {
   // =============================================
   // 清理 JSON 代码块
   // =============================================
-  const cleanJsonFromContent = (content: string): string => {
+  const cleanJsonFromContent = useCallback((content: string): string => {
     if (!content) return ''
     let cleaned = content.replace(/```json\s*[\s\S]*?```/g, '').trim()
     cleaned = cleaned.replace(/```\s*[\s\S]*?```/g, '').trim()
@@ -284,116 +293,126 @@ const Index: FC = () => {
       }
     }
     return cleaned || content
-  }
+  }, [])
 
   // =============================================
-  // 处理确认任务
-  // 注意：任务已由 Agent 创建/修改/删除，这里只做展示和撤销逻辑
+  // 处理确认操作 - 批量创建/删除/更新
   // =============================================
-  const handleConfirmTask = useCallback(async (task: PendingTask) => {
-    try {
-      setIsLoading(true)
-      
-      // 任务已由 Agent 处理，直接显示成功消息
-      if (confirmType === 'add') {
-        Taro.showToast({ title: '添加成功', icon: 'success' })
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: `✅ 已添加日程：${task.title}`,
-          timestamp: new Date(),
-        }])
-      } else if (confirmType === 'modify') {
-        Taro.showToast({ title: '修改成功', icon: 'success' })
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: `✅ 已修改日程：${task.title}`,
-          timestamp: new Date(),
-        }])
-      } else if (confirmType === 'delete') {
-        Taro.showToast({ title: '删除成功', icon: 'success' })
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: `🗑️ 已删除日程：${task.title}`,
-          timestamp: new Date(),
-        }])
-      }
-      
-      setShowConfirmModal(false)
-      setPendingTask(null)
-      setOriginalTask(null)
-      scrollToBottom()
-    } catch (error) {
-      console.error('[确认] 操作失败:', error)
-      Taro.showToast({ title: '操作失败', icon: 'error' })
-    } finally {
-      setIsLoading(false)
-    }
-  }, [confirmType, scrollToBottom])
-
-  // 处理取消确认（撤销操作）
-  const handleCancelConfirm = useCallback(async () => {
-    if (!pendingTask && createdTaskIds.length === 0) {
-      setShowConfirmModal(false)
-      return
-    }
+  const handleConfirmBatchAdd = useCallback(async () => {
+    if (pendingTasks.length === 0) return
 
     try {
       setIsLoading(true)
+      console.log('[确认] 批量创建任务:', pendingTasks.length)
       
-      if (confirmType === 'add') {
-        // 撤销新增：批量删除所有创建的任务
-        const idsToDelete = createdTaskIds.length > 0 ? createdTaskIds : (pendingTask?.id ? [pendingTask.id] : [])
-        
-        if (idsToDelete.length > 0) {
-          console.log('[取消] 删除任务 IDs:', idsToDelete)
-          
-          // 并行删除所有任务
-          await Promise.all(idsToDelete.map(id => 
-            Network.request({
-              url: `/api/tasks/${id}`,
-              method: 'DELETE'
-            }).catch(err => console.error('[取消] 删除失败:', id, err))
-          ))
-          
-          const cancelMsg = idsToDelete.length > 1 
-            ? `❌ 已取消添加 ${idsToDelete.length} 个日程` 
-            : `❌ 已取消添加日程`
-          
-          Taro.showToast({ title: '已取消', icon: 'none' })
-          setMessages(prev => [...prev, {
-            id: Date.now().toString(),
-            role: 'assistant',
-            content: cancelMsg,
-            timestamp: new Date(),
-          }])
-        } else {
-          Taro.showToast({ title: '已取消', icon: 'none' })
-        }
-      } else if (confirmType === 'modify') {
-        // 撤销修改：恢复原任务（简化处理，只显示取消）
-        Taro.showToast({ title: '已取消', icon: 'none' })
-      } else if (confirmType === 'delete') {
-        // 撤销删除：无法恢复（简化处理）
-        Taro.showToast({ title: '已取消', icon: 'none' })
-      }
+      const res = await Network.request({
+        url: '/api/tasks/batch',
+        method: 'POST',
+        data: { tasks: pendingTasks }
+      })
+      
+      const createdCount = res.data?.data?.createdCount || pendingTasks.length
+      Taro.showToast({ title: `成功创建 ${createdCount} 个日程`, icon: 'success' })
+      
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `✅ 已添加 ${createdCount} 个日程`,
+        timestamp: new Date(),
+      }])
       
       setShowConfirmModal(false)
-      setPendingTask(null)
-      setOriginalTask(null)
-      setCreatedTaskIds([])
-      setCreatedCount(0)
+      setPendingTasks([])
       scrollToBottom()
     } catch (error) {
-      console.error('[取消] 操作失败:', error)
-      Taro.showToast({ title: '取消失败', icon: 'error' })
-      setShowConfirmModal(false)
+      console.error('[确认] 批量创建失败:', error)
+      Taro.showToast({ title: '创建失败', icon: 'error' })
     } finally {
       setIsLoading(false)
     }
-  }, [confirmType, pendingTask, createdTaskIds, scrollToBottom])
+  }, [pendingTasks, scrollToBottom])
+
+  const handleConfirmBatchDelete = useCallback(async () => {
+    if (pendingDeleteIds.length === 0) return
+
+    try {
+      setIsLoading(true)
+      console.log('[确认] 批量删除任务:', pendingDeleteIds.length)
+      
+      const res = await Network.request({
+        url: '/api/tasks/batch-delete',
+        method: 'POST',
+        data: { taskIds: pendingDeleteIds }
+      })
+      
+      const deletedCount = res.data?.data?.deletedCount || pendingDeleteIds.length
+      Taro.showToast({ title: `已删除 ${deletedCount} 个日程`, icon: 'success' })
+      
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `🗑️ 已删除 ${deletedCount} 个日程`,
+        timestamp: new Date(),
+      }])
+      
+      setShowConfirmModal(false)
+      setPendingDeleteTasks([])
+      setPendingDeleteIds([])
+      scrollToBottom()
+    } catch (error) {
+      console.error('[确认] 批量删除失败:', error)
+      Taro.showToast({ title: '删除失败', icon: 'error' })
+    } finally {
+      setIsLoading(false)
+    }
+  }, [pendingDeleteIds, scrollToBottom])
+
+  const handleConfirmModify = useCallback(async () => {
+    if (!updatedTask) return
+
+    try {
+      setIsLoading(true)
+      console.log('[确认] 更新任务:', updatedTask.title)
+      
+      // 调用更新 API
+      await Network.request({
+        url: `/api/tasks/${(updatedTask as any).id}`,
+        method: 'PUT',
+        data: updatedTask
+      })
+      
+      Taro.showToast({ title: '修改成功', icon: 'success' })
+      
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `✅ 已修改日程：${updatedTask.title}`,
+        timestamp: new Date(),
+      }])
+      
+      setShowConfirmModal(false)
+      setOriginalTask(null)
+      setUpdatedTask(null)
+      scrollToBottom()
+    } catch (error) {
+      console.error('[确认] 更新失败:', error)
+      Taro.showToast({ title: '修改失败', icon: 'error' })
+    } finally {
+      setIsLoading(false)
+    }
+  }, [updatedTask, scrollToBottom])
+
+  // 处理取消确认 - 直接关闭弹窗（不执行任何操作）
+  const handleCancelConfirm = useCallback(() => {
+    console.log('[取消] 用户取消操作')
+    setShowConfirmModal(false)
+    setPendingTasks([])
+    setPendingDeleteTasks([])
+    setPendingDeleteIds([])
+    setOriginalTask(null)
+    setUpdatedTask(null)
+    Taro.showToast({ title: '已取消', icon: 'none' })
+  }, [])
 
   // =============================================
   // 发送消息 - 使用流式客户端
@@ -509,24 +528,34 @@ const Index: FC = () => {
           const targetId = currentAiMessageIdRef.current
           if (!targetId) return
           
-          // ========== 新增：检查是否需要确认 ==========
+          // ========== 检查是否需要确认 ==========
           const responseData = data.data as MessageData | undefined
-          if (responseData?.needConfirmation && responseData?.pendingTask) {
-            console.log('[主页面] 检测到待确认任务:', responseData.pendingTask, '类型:', responseData.confirmType)
+          if (responseData?.needConfirmation) {
+            console.log('[主页面] 检测到待确认操作，类型:', responseData.confirmType)
             
-            // 设置确认弹窗状态
-            setPendingTask(responseData.pendingTask)
-            setConfirmType(responseData.confirmType || 'add')
-            if (responseData.originalTask) {
-              setOriginalTask(responseData.originalTask as PendingTask)
+            // 设置确认类型
+            setConfirmType(responseData.confirmType || 'batch_add')
+            
+            // 批量创建任务
+            if (responseData.confirmType === 'batch_add' && responseData.pendingTasks) {
+              console.log('[主页面] 待创建任务数量:', responseData.pendingTasks.length)
+              setPendingTasks(responseData.pendingTasks)
+              setShowConfirmModal(true)
             }
-            // 保存创建的任务 ID，用于取消时批量删除
-            if (responseData.createdTaskIds && responseData.createdTaskIds.length > 0) {
-              console.log('[主页面] 创建的任务 IDs:', responseData.createdTaskIds)
-              setCreatedTaskIds(responseData.createdTaskIds)
-              setCreatedCount(responseData.createdCount || responseData.createdTaskIds.length)
+            // 批量删除任务
+            else if (responseData.confirmType === 'batch_delete' && responseData.pendingDeleteTasks) {
+              console.log('[主页面] 待删除任务数量:', responseData.pendingDeleteTasks.length)
+              setPendingDeleteTasks(responseData.pendingDeleteTasks)
+              setPendingDeleteIds(responseData.pendingDeleteIds || [])
+              setShowConfirmModal(true)
             }
-            setShowConfirmModal(true)
+            // 单个任务更新
+            else if (responseData.confirmType === 'modify' && responseData.updatedTask) {
+              console.log('[主页面] 待更新任务:', responseData.updatedTask.title)
+              setOriginalTask(responseData.originalTask as PendingTask || null)
+              setUpdatedTask(responseData.updatedTask)
+              setShowConfirmModal(true)
+            }
           }
           
           setMessages(prev => prev.map(m => {
@@ -960,18 +989,19 @@ const Index: FC = () => {
         </View>
       </View>
 
-      {/* ========== 新增：确认弹窗 ========== */}
-      {pendingTask && (
-        <ConfirmModal
-          type={confirmType}
-          task={pendingTask}
-          originalTask={originalTask ?? undefined}
-          visible={showConfirmModal}
-          createdCount={createdCount}
-          onConfirm={handleConfirmTask}
-          onCancel={handleCancelConfirm}
-        />
-      )}
+      {/* ========== 确认弹窗 ========== */}
+      <ConfirmModal
+        type={confirmType}
+        visible={showConfirmModal}
+        pendingTasks={pendingTasks}
+        pendingDeleteTasks={pendingDeleteTasks}
+        originalTask={originalTask ?? undefined}
+        updatedTask={updatedTask ?? undefined}
+        onConfirmBatchAdd={handleConfirmBatchAdd}
+        onConfirmBatchDelete={handleConfirmBatchDelete}
+        onConfirmModify={handleConfirmModify}
+        onCancel={handleCancelConfirm}
+      />
     </View>
   )
 }

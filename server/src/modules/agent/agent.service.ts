@@ -785,12 +785,13 @@ ${TOOL_NAMES.map(t => `- ${t.name}: ${t.description}`).join('\n')}
 
   /**
    * 从工具结果中提取数据
-   * 如果是任务创建/修改/删除操作，返回确认信息
+   * 收集任务参数预览，用于用户确认后批量执行
    */
   private extractDataFromResults(results: AgentResponse['tool_results']): any {
     const data: any = {}
-    const createdTaskIds: string[] = []
-    let lastCreatedTask: any = null
+    const pendingTasks: any[] = []
+    const pendingDeleteTasks: any[] = []
+    const pendingDeleteIds: string[] = []
 
     for (const r of results) {
       if (r.result.success && r.result.data) {
@@ -798,77 +799,49 @@ ${TOOL_NAMES.map(t => `- ${t.name}: ${t.description}`).join('\n')}
         if (r.tool === 'task_query') {
           data.tasks = r.result.data.tasks
         } else if (r.tool === 'task_create') {
-          // 收集所有创建的任务
-          const task = r.result.data
-          if (task.id) {
-            createdTaskIds.push(task.id)
+          // 收集预览任务参数
+          const resultData = r.result.data
+          if (resultData.preview && resultData.task) {
+            pendingTasks.push(resultData.task)
           }
-          lastCreatedTask = task
         } else if (r.tool === 'task_update') {
-          // 任务更新成功，返回确认信息
-          const task = r.result.data
-          data.needConfirmation = true
-          data.confirmType = 'modify'
-          data.pendingTask = {
-            id: task.id,
-            title: task.title,
-            type: task.type,
-            scheduled_time: task.scheduled_time,
-            end_time: task.end_time,
-            location_name: task.location_name,
-            destination_name: task.destination_name,
-            metadata: task.metadata,
-            status: task.status,
-          }
-          data.task = task
-        } else if (r.tool === 'task_delete') {
-          // 任务删除成功，返回确认信息
-          if (r.result.data.deleted) {
-            const task = r.result.data.deleted
+          // 任务更新预览
+          const resultData = r.result.data
+          if (resultData.preview) {
             data.needConfirmation = true
-            data.confirmType = 'delete'
-            data.pendingTask = {
-              id: task.id,
-              title: task.title,
-              type: task.type,
-              scheduled_time: task.scheduled_time,
-              end_time: task.end_time,
-              location_name: task.location_name,
-              destination_name: task.destination_name,
-              metadata: task.metadata,
-              status: task.status,
+            data.confirmType = 'modify'
+            data.originalTask = resultData.originalTask
+            data.updatedTask = resultData.updatedTask
+            data.updates = resultData.updates
+          }
+        } else if (r.tool === 'task_delete') {
+          // 收集待删除任务
+          const resultData = r.result.data
+          if (resultData.preview) {
+            if (resultData.tasks && resultData.tasks.length > 0) {
+              pendingDeleteTasks.push(...resultData.tasks)
+              pendingDeleteIds.push(...(resultData.taskIds || resultData.tasks.map((t: any) => t.id)))
             }
-            data.deleted = task
-          } else if (r.result.data.count) {
-            data.deletedCount = r.result.data.count
           }
         }
       }
     }
 
-    // 如果有创建的任务，返回确认信息
-    if (createdTaskIds.length > 0 && lastCreatedTask) {
+    // 如果有待创建的任务
+    if (pendingTasks.length > 0) {
       data.needConfirmation = true
-      data.confirmType = 'add'
-      data.pendingTask = {
-        id: lastCreatedTask.id,
-        title: lastCreatedTask.title,
-        type: lastCreatedTask.type,
-        scheduled_time: lastCreatedTask.scheduled_time,
-        end_time: lastCreatedTask.end_time,
-        location_name: lastCreatedTask.location_name,
-        destination_name: lastCreatedTask.destination_name,
-        metadata: lastCreatedTask.metadata,
-        status: lastCreatedTask.status,
-      }
-      // 收集所有创建的任务 ID，用于取消时批量删除
-      data.createdTaskIds = createdTaskIds
-      data.task = lastCreatedTask
-      
-      // 如果创建了多个任务，在消息中提示
-      if (createdTaskIds.length > 1) {
-        data.createdCount = createdTaskIds.length
-      }
+      data.confirmType = 'batch_add'
+      data.pendingTasks = pendingTasks
+      data.pendingCount = pendingTasks.length
+    }
+
+    // 如果有待删除的任务
+    if (pendingDeleteTasks.length > 0) {
+      data.needConfirmation = true
+      data.confirmType = 'batch_delete'
+      data.pendingDeleteTasks = pendingDeleteTasks
+      data.pendingDeleteIds = pendingDeleteIds
+      data.pendingDeleteCount = pendingDeleteTasks.length
     }
 
     return Object.keys(data).length > 0 ? data : undefined
