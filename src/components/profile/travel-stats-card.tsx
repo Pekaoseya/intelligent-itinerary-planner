@@ -121,24 +121,33 @@ export const TravelStatsCard: FC<TravelStatsCardProps> = ({ stats }) => {
 
       {/* 时段分布 */}
       <Card className="rounded-xl mt-3">
-        <CardContent className="p-4">
-          <Text className="text-sm text-gray-500 mb-3">出行时段分布</Text>
-          <View className="flex items-end justify-around h-24">
+        <CardContent className="p-4" style={{ overflow: 'hidden' }}>
+          <View className="mb-3" style={{ minHeight: '20px' }}>
+            <Text className="text-sm text-gray-500">出行时段分布</Text>
+          </View>
+          <View
+            className="flex items-end justify-around"
+            style={{ height: '100px', width: '100%', maxWidth: '100%', overflow: 'hidden' }}
+          >
             {Object.entries(stats.time_distribution).map(([key, value]) => {
               const config = TIME_PERIOD_CONFIG[key]
               const maxVal = getMaxValue(stats.time_distribution)
-              const height = maxVal > 0 ? (value / maxVal) * 80 : 0
+              const height = maxVal > 0 ? (value / maxVal) * 60 : 0
               return (
-                <View key={key} className="flex flex-col items-center">
+                <View key={key} className="flex flex-col items-center" style={{ minWidth: 0, flex: 1 }}>
                   <Text className="text-xs text-gray-500 mb-1">{value}</Text>
                   <View
-                    className="w-8 rounded-t"
+                    className="rounded-t"
                     style={{
-                      height: `${height}px`,
+                      width: '24px',
+                      maxWidth: '32px',
+                      height: `${Math.max(height, 4)}px`,
                       backgroundColor: config?.color || '#999',
                     }}
                   />
-                  <Text className="text-xs text-gray-400 mt-2">{config?.name || key}</Text>
+                  <Text className="text-xs text-gray-400 mt-2" style={{ whiteSpace: 'nowrap' }}>
+                    {config?.name || key}
+                  </Text>
                 </View>
               )
             })}
