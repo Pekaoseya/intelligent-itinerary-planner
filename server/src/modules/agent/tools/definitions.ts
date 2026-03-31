@@ -45,6 +45,14 @@ export const TOOLS = {
           properties: {
             type: { type: 'string', description: '按类型筛选' },
             date: { type: 'string', description: '按日期筛选（YYYY-MM-DD）' },
+            date_range: { 
+              type: 'object', 
+              properties: { 
+                start: { type: 'string', description: '开始日期' }, 
+                end: { type: 'string', description: '结束日期' } 
+              },
+              description: '按日期范围筛选' 
+            },
             status: { type: 'string', description: '按状态筛选' },
             keyword: { type: 'string', description: '按关键词筛选' },
             expired: { type: 'boolean', description: '只删除过期的' },

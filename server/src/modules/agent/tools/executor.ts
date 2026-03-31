@@ -1500,11 +1500,22 @@ async function executeTaskDelete(args: any, userId: string): Promise<ToolResult>
       // 删除所有
     } else {
       if (filter.type) query = query.eq('type', filter.type)
-      if (filter.date) {
+      
+      // 支持单日期和日期范围
+      if (filter.date_range && filter.date_range.start && filter.date_range.end) {
+        // 日期范围删除
+        const startTime = `${filter.date_range.start}T00:00:00Z`
+        const endTime = `${filter.date_range.end}T23:59:59Z`
+        query = query.gte('scheduled_time', startTime).lte('scheduled_time', endTime)
+        console.log(`[TaskDelete] 日期范围筛选: ${filter.date_range.start} ~ ${filter.date_range.end}`)
+      } else if (filter.date) {
+        // 单日期删除
         const startOfDay = `${filter.date}T00:00:00Z`
         const endOfDay = `${filter.date}T23:59:59Z`
         query = query.gte('scheduled_time', startOfDay).lte('scheduled_time', endOfDay)
+        console.log(`[TaskDelete] 单日期筛选: ${filter.date}`)
       }
+      
       if (filter.status) query = query.eq('status', filter.status)
       if (filter.keyword) {
         query = query.or(`title.ilike.%${filter.keyword}%,location_name.ilike.%${filter.keyword}%`)
