@@ -13,13 +13,16 @@ export interface UseLocationResult {
   location: UserLocation | null
   loading: boolean
   error: string | null
+  showDetail: boolean
   fetchLocation: () => Promise<void>
+  setShowDetail: (show: boolean) => void
 }
 
 export function useLocation(): UseLocationResult {
   const [location, setLocation] = useState<UserLocation | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showDetail, setShowDetail] = useState(false)
 
   const fetchLocation = useCallback(async () => {
     setLoading(true)
@@ -92,5 +95,5 @@ export function useLocation(): UseLocationResult {
     }
   }, [])
 
-  return { location, loading, error, fetchLocation }
+  return { location, loading, error, showDetail, fetchLocation, setShowDetail }
 }
