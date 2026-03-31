@@ -1,0 +1,53 @@
+.profile-page {
+  min-height: 100vh;
+}
+
+/* 安全容器 - 防止真机右侧溢出 */
+.safe-container {
+  width: 100vw;
+  max-width: 100vw;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* 强制所有子元素使用 border-box */
+.safe-container * {
+  box-sizing: border-box;
+}
+
+/* 防止内容溢出 */
+.safe-container view,
+.safe-container text {
+  max-width: 100%;
+  word-wrap: break-word;
+}
+
+/* 全局防溢出样式 - 小程序端 */
+page {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* flex 子元素防止内容撑开导致溢出 */
+.flex-1 {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ScrollView 防溢出 */
+scroll-view {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* Card 防溢出 */
+.taro-card {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* 文本防溢出 */
+text {
+  max-width: 100%;
+  word-wrap: break-word;
+}
