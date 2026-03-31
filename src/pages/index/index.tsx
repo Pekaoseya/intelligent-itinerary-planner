@@ -284,42 +284,75 @@ const Index: FC = () => {
   const simplifyAddress = useCallback((address: string): string => {
     if (!address) return ''
     
-    // 提取关键信息：街道名 + 大厦/建筑名
-    // 例如："浙江省杭州市西湖区翠苑街道九莲新村九莲新村西区" -> "翠苑街道九莲新村"
-    // 例如："浙江省杭州市西湖区西溪街道文三路197号创业大厦(文三路)" -> "文三路创业大厦"
-    
-    // 先尝试提取路名和建筑名
-    const roadMatch = address.match(/([^\s]+路\d*号?)/)
-    const buildingMatch = address.match(/([\u4e00-\u9fa5]+大厦|[\u4e00-\u9fa5]+大楼|[\u4e00-\u9fa5]+中心|[\u4e00-\u9fa5]+广场|[\u4e00-\u9fa5]+小区|[\u4e00-\u9fa5]+村)/)
-    const streetMatch = address.match(/([\u4e00-\u9fa5]+街道)/)
+    // 先去掉括号及其内容，避免匹配到括号里的路名
+    const cleanAddress = address.replace(/\([^)]*\)/g, '')
     
     const parts: string[] = []
     
-    if (roadMatch) {
-      // 有路名，提取路名（去掉门牌号）
-      parts.push(roadMatch[1].replace(/\d+号?/, '').trim())
-    }
-    
-    if (buildingMatch) {
-      parts.push(buildingMatch[1])
-    } else if (streetMatch && !roadMatch) {
-      // 没有路名但有街道
-      parts.push(streetMatch[1])
-    }
-    
-    // 如果都没匹配到，取最后两个有意义的词
-    if (parts.length === 0) {
-      const segments = address.split(/[省市县区]/)
-      const lastPart = segments[segments.length - 1] || address
-      // 限制长度
-      if (lastPart.length > 10) {
-        return lastPart.substring(0, 10) + '...'
+    // 1. 提取路名：找最后一个"路"字，取前面2-4个字
+    const roadIdx = cleanAddress.lastIndexOf('路')
+    if (roadIdx > 0) {
+      let start = roadIdx - 1
+      while (start >= 0 && roadIdx - start <= 4 && !/[省市县区街道]/.test(cleanAddress[start])) {
+        start--
       }
-      return lastPart
+      const roadName = cleanAddress.substring(start + 1, roadIdx + 1)
+      if (roadName.length >= 2) {
+        parts.push(roadName)
+      }
+    }
+    
+    // 2. 提取建筑名：大厦/大楼/中心/广场
+    const buildingKeywords = ['大厦', '大楼', '中心', '广场']
+    let buildingName: string | null = null
+    
+    for (const kw of buildingKeywords) {
+      const idx = cleanAddress.lastIndexOf(kw)
+      if (idx > 0) {
+        let start = idx - 1
+        let charCount = 0
+        // 向前提取最多5个字
+        while (start >= 0 && charCount < 5 && !/[号区省市县]/.test(cleanAddress[start])) {
+          start--
+          charCount++
+        }
+        const name = cleanAddress.substring(start + 1, idx + kw.length)
+        if (name.length >= 2 && name.length <= 7) {
+          buildingName = name
+          break
+        }
+      }
+    }
+    
+    if (buildingName) {
+      parts.push(buildingName)
+    }
+    
+    // 3. 如果没找到建筑名，尝试小区/村
+    if (parts.length <= 1) {
+      const villageKeywords = ['小区', '村']
+      for (const kw of villageKeywords) {
+        const matches = cleanAddress.match(new RegExp(`[\u4e00-\u9fa5]{2,4}${kw}`, 'g'))
+        if (matches) {
+          parts.push(matches[matches.length - 1])
+          break
+        }
+      }
+    }
+    
+    // 4. 如果什么都没找到，尝试街道
+    if (parts.length === 0) {
+      const streetMatch = cleanAddress.match(/([\u4e00-\u9fa5]{2}街道)/)
+      if (streetMatch) {
+        parts.push(streetMatch[1])
+      }
     }
     
     const result = parts.join('')
-    return result.length > 12 ? result.substring(0, 12) + '...' : result
+    if (result.length > 12) {
+      return result.substring(0, 12) + '...'
+    }
+    return result || address.slice(-10)
   }, [])
 
   // =============================================
