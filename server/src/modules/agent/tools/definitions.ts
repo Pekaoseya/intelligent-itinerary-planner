@@ -205,6 +205,28 @@ export const TOOLS = {
       },
     },
   },
+
+  // 行程规划工具
+  trip_plan: {
+    name: 'trip_plan',
+    description: '智能行程规划。根据起点和终点自动规划最佳路线，拆分为多个任务（如：打车去机场 → 飞往目的地 → 打车到酒店）。支持打车、高铁、飞机等多种交通方式。',
+    parameters: {
+      type: 'object',
+      properties: {
+        origin: { type: 'string', description: '出发地（可选，默认使用当前位置）' },
+        destination: { type: 'string', description: '目的地' },
+        departure_time: { type: 'string', description: '出发时间（ISO格式，可选）' },
+        arrival_time: { type: 'string', description: '期望到达时间（ISO格式，可选）' },
+        preferred_mode: { 
+          type: 'string', 
+          enum: ['taxi', 'train', 'flight'],
+          description: '优先交通方式（可选）' 
+        },
+        notes: { type: 'string', description: '备注信息（可选）' },
+      },
+      required: ['destination'],
+    },
+  },
 }
 
 // =============================================

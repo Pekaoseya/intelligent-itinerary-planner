@@ -1,13 +1,13 @@
 /**
  * 确认弹窗容器组件
- * 支持批量创建、批量删除、单个更新
+ * 支持批量创建、批量删除、单个更新、行程规划
  */
 
 import { View, Text, ScrollView } from '@tarojs/components'
 import { type FC } from 'react'
-import { Plus, Trash2, X, Car, TrainFront, Plane, Users, Utensils, Building2, Check, Pencil } from 'lucide-react-taro'
+import { Plus, Trash2, X, Car, TrainFront, Plane, Users, Utensils, Building2, Check, Pencil, MapPin, Clock, Route, Sparkles } from 'lucide-react-taro'
 import { Button } from '@/components/ui/button'
-import type { ConfirmModalProps, PendingTask } from './types'
+import type { ConfirmModalProps, PendingTask, RouteInfo } from './types'
 
 // 任务类型图标映射
 const getTaskIcon = (type: string) => {
@@ -45,6 +45,30 @@ const formatTime = (dateStr: string) => {
   return `${date.getMonth() + 1}月${date.getDate()}日 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
 }
 
+// 时间格式化（仅时分）
+const formatTimeOnly = (dateStr: string) => {
+  const date = new Date(dateStr)
+  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+}
+
+// 距离格式化
+const formatDistance = (meters: number) => {
+  if (meters >= 1000) {
+    return `${(meters / 1000).toFixed(1)}km`
+  }
+  return `${meters}m`
+}
+
+// 时长格式化
+const formatDuration = (seconds: number) => {
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  if (hours > 0) {
+    return `${hours}小时${minutes > 0 ? minutes + '分钟' : ''}`
+  }
+  return `${minutes}分钟`
+}
+
 // 任务卡片组件
 const TaskCard: FC<{ task: PendingTask }> = ({ task }) => {
   const Icon = getTaskIcon(task.type)
@@ -73,6 +97,148 @@ const TaskCard: FC<{ task: PendingTask }> = ({ task }) => {
         {task.conflictWarning && (
           <Text className="text-xs text-orange-500 mt-1">{task.conflictWarning}</Text>
         )}
+      </View>
+    </View>
+  )
+}
+
+// 行程规划任务卡片
+const TripTaskCard: FC<{ task: PendingTask; index: number }> = ({ task, index }) => {
+  const Icon = getTaskIcon(task.type)
+  const duration = task.metadata?.duration as number | undefined
+  
+  return (
+    <View className="flex items-start gap-3 p-3 bg-white border border-gray-100 rounded-lg mb-2 shadow-sm">
+      {/* 序号 */}
+      <View className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center">
+        <Text className="text-xs font-bold text-white">{index + 1}</Text>
+      </View>
+      {/* 图标 */}
+      <View className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
+        <Icon size={16} color="#3b82f6" />
+      </View>
+      <View className="flex-1 min-w-0">
+        <Text className="text-sm font-medium text-gray-900 mb-1">{task.title}</Text>
+        <View className="flex items-center gap-2 text-xs text-gray-500">
+          <Clock size={12} color="#999" />
+          <Text>{formatTimeOnly(task.scheduled_time)}</Text>
+          {duration && (
+            <>
+              <Text>·</Text>
+              <Text>{formatDuration(duration)}</Text>
+            </>
+          )}
+        </View>
+        {task.description && (
+          <Text className="text-xs text-gray-400 mt-1">{task.description}</Text>
+        )}
+      </View>
+    </View>
+  )
+}
+
+// 思考过程展示
+const ReasoningSection: FC<{ reasoning: string[] }> = ({ reasoning }) => {
+  if (!reasoning || reasoning.length === 0) return null
+  
+  return (
+    <View className="bg-blue-50 rounded-lg p-3 mb-4">
+      <View className="flex items-center gap-2 mb-2">
+        <Sparkles size={14} color="#3b82f6" />
+        <Text className="text-sm font-medium text-blue-600">AI 规划思路</Text>
+      </View>
+      {reasoning.map((step, index) => (
+        <View key={index} className="flex items-start gap-2 mb-1">
+          <Text className="text-xs text-blue-400">{index + 1}.</Text>
+          <Text className="text-xs text-gray-600">{step}</Text>
+        </View>
+      ))}
+    </View>
+  )
+}
+
+// 行程规划确认
+const TripPlanConfirm: FC<{
+  tasks: PendingTask[]
+  routes: RouteInfo[]
+  summary: string
+  reasoning: string[]
+  onConfirm: () => void
+  onCancel: () => void
+}> = ({ tasks, routes, summary, reasoning, onConfirm, onCancel }) => {
+  const route = routes[0] // 使用第一个推荐方案
+  
+  return (
+    <View className="w-full">
+      {/* 标题栏 */}
+      <View className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <View className="flex items-center gap-2">
+          <View className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center">
+            <Route size={18} color="#fff" />
+          </View>
+          <Text className="text-lg font-bold">行程规划确认</Text>
+          <Text className="text-sm text-gray-500">({tasks.length}个任务)</Text>
+        </View>
+        <Button size="sm" variant="ghost" className="p-1" onClick={onCancel}>
+          <X size={24} color="#999" />
+        </Button>
+      </View>
+
+      {/* 路线概览 */}
+      {route && (
+        <View className="px-4 py-3 bg-gradient-to-r from-blue-50 to-purple-50">
+          <View className="flex items-center justify-between mb-2">
+            <Text className="text-base font-bold text-gray-900">{route.name}</Text>
+            {route.highlights && route.highlights.length > 0 && (
+              <Text className="text-xs text-blue-500 bg-blue-100 px-2 py-1 rounded-full">
+                {route.highlights[0]}
+              </Text>
+            )}
+          </View>
+          <View className="flex items-center gap-4 text-sm text-gray-600">
+            <View className="flex items-center gap-1">
+              <MapPin size={14} color="#666" />
+              <Text>{formatDistance(route.totalDistance)}</Text>
+            </View>
+            <View className="flex items-center gap-1">
+              <Clock size={14} color="#666" />
+              <Text>{formatDuration(route.totalDuration)}</Text>
+            </View>
+            {route.totalCost && (
+              <Text className="text-orange-500">约 ¥{route.totalCost}</Text>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* 任务列表 */}
+      <ScrollView scrollY className="px-4 py-4" style={{ maxHeight: '40vh' }}>
+        {/* 思考过程 */}
+        <ReasoningSection reasoning={reasoning} />
+        
+        {/* 摘要 */}
+        <View className="mb-3">
+          <Text className="text-sm text-gray-500">{summary}</Text>
+        </View>
+        
+        {/* 任务卡片 */}
+        <View className="mb-2">
+          <Text className="text-sm font-medium text-gray-700 mb-2">行程安排</Text>
+        </View>
+        {tasks.map((task, index) => (
+          <TripTaskCard key={index} task={task} index={index} />
+        ))}
+      </ScrollView>
+
+      {/* 底部按钮 */}
+      <View className="flex gap-3 px-4 py-4 border-t border-gray-100">
+        <Button variant="outline" className="flex-1" onClick={onCancel}>
+          <Text className="text-gray-600">取消</Text>
+        </Button>
+        <Button className="flex-1 bg-purple-500" onClick={onConfirm}>
+          <Route size={16} color="#fff" />
+          <Text className="text-white ml-1">确认创建行程 ({tasks.length}个)</Text>
+        </Button>
       </View>
     </View>
   )
@@ -224,15 +390,30 @@ export const ConfirmModal: FC<ConfirmModalProps> = ({
   pendingDeleteTasks,
   originalTask,
   updatedTask,
+  routes,
+  summary,
+  reasoning,
   onConfirmBatchAdd,
   onConfirmBatchDelete,
   onConfirmModify,
+  onConfirmTripPlan,
   onCancel,
 }) => {
   if (!visible) return null
 
   const renderContent = () => {
     switch (type) {
+      case 'trip_plan':
+        return pendingTasks && pendingTasks.length > 0 ? (
+          <TripPlanConfirm
+            tasks={pendingTasks}
+            routes={routes || []}
+            summary={summary || ''}
+            reasoning={reasoning || []}
+            onConfirm={onConfirmTripPlan}
+            onCancel={onCancel}
+          />
+        ) : null
       case 'batch_add':
         return pendingTasks && pendingTasks.length > 0 ? (
           <BatchAddConfirm

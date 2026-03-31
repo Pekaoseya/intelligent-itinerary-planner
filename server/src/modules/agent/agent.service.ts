@@ -382,6 +382,8 @@ ${toolResultsSummary}
       task_delete: '删除任务',
       task_update: '更新任务',
       task_query: '查询任务',
+      trip_plan: '规划行程',
+      taxi_call: '呼叫网约车',
     }
     return names[toolName] || toolName
   }
@@ -474,6 +476,17 @@ ${locationInfo}
 2. **像人一样对话**：遇到不清楚的地方，自然地追问
 3. **时间冲突由工具自动检测**：创建任务时工具会自动检查
 4. **智能推算时间**：打车30分钟、火车提前30分钟、飞机提前2小时、会议1小时
+
+## 行程规划
+
+当用户需要跨城市出行或复杂行程时，使用 trip_plan 工具：
+- 自动规划最佳路线（打车/高铁/飞机）
+- 拆分为多个任务（如：打车去机场 → 飞往目的地 → 打车到酒店）
+- 展示思考过程：分析需求 → 查询高德地图 → 规划路线 → 拆分任务
+
+示例：
+- "明天去上海出差" → trip_plan(destination: "上海", departure_time: "明天上午")
+- "下周去北京开会" → trip_plan(destination: "北京", preferred_mode: "flight")
 
 ## 日期参考
 
@@ -604,6 +617,20 @@ ${TOOL_NAMES.map(t => `- ${t.name}: ${t.description}`).join('\n')}
               pendingDeleteIds.push(...(resultData.taskIds || resultData.tasks.map((t: any) => t.id)))
             }
           }
+        } else if (r.tool === 'trip_plan') {
+          // 行程规划预览
+          const resultData = r.result.data
+          if (resultData.preview && resultData.splitTasks) {
+            data.needConfirmation = true
+            data.confirmType = 'trip_plan'
+            data.routes = resultData.routes
+            data.recommendedIndex = resultData.recommendedIndex
+            data.splitTasks = resultData.splitTasks
+            data.summary = resultData.summary
+            data.reasoning = resultData.reasoning
+            // 也加入 pendingTasks，方便前端统一处理
+            pendingTasks.push(...resultData.splitTasks)
+          }
         }
       }
     }
@@ -611,7 +638,10 @@ ${TOOL_NAMES.map(t => `- ${t.name}: ${t.description}`).join('\n')}
     // 如果有待创建的任务
     if (pendingTasks.length > 0) {
       data.needConfirmation = true
-      data.confirmType = 'batch_add'
+      // 如果不是 trip_plan，则设置为 batch_add
+      if (!data.confirmType) {
+        data.confirmType = 'batch_add'
+      }
       data.pendingTasks = pendingTasks
       data.pendingCount = pendingTasks.length
     }

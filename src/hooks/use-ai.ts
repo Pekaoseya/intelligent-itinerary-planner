@@ -39,6 +39,7 @@ export function useAI(options: UseAIOptions): UseAIResult {
     showBatchAdd,
     showBatchDelete,
     showModify,
+    showTripPlan,
   } = useConfirmStore()
   
   // 保存当前流式连接
@@ -199,7 +200,15 @@ export function useAI(options: UseAIOptions): UseAIResult {
   const handleConfirmation = (responseData: any) => {
     console.log('[useAI] 检测到待确认操作，类型:', responseData.confirmType)
     
-    if (responseData.confirmType === 'batch_add' && responseData.pendingTasks) {
+    if (responseData.confirmType === 'trip_plan' && responseData.splitTasks) {
+      // 行程规划确认
+      showTripPlan(
+        responseData.splitTasks,
+        responseData.routes || [],
+        responseData.summary || '',
+        responseData.reasoning || []
+      )
+    } else if (responseData.confirmType === 'batch_add' && responseData.pendingTasks) {
       showBatchAdd(responseData.pendingTasks)
     } else if (responseData.confirmType === 'batch_delete' && responseData.pendingDeleteTasks) {
       showBatchDelete(responseData.pendingDeleteTasks, responseData.pendingDeleteIds || [])

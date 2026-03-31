@@ -55,9 +55,13 @@ const Index: FC = () => {
     pendingDeleteTasks,
     originalTask,
     updatedTask,
+    routes,
+    summary,
+    reasoning,
     confirmBatchAdd,
     confirmBatchDelete,
     confirmModify,
+    confirmTripPlan,
     cancelConfirm,
   } = useConfirm({
     onScrollToBottom: scrollToBottom,
@@ -116,9 +120,13 @@ const Index: FC = () => {
         pendingDeleteTasks={pendingDeleteTasks}
         originalTask={originalTask ?? undefined}
         updatedTask={updatedTask ?? undefined}
+        routes={routes}
+        summary={summary}
+        reasoning={reasoning}
         onConfirmBatchAdd={confirmBatchAdd}
         onConfirmBatchDelete={confirmBatchDelete}
         onConfirmModify={confirmModify}
+        onConfirmTripPlan={confirmTripPlan}
         onCancel={cancelConfirm}
       />
     </View>

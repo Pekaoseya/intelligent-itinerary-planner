@@ -18,6 +18,7 @@ export { resetMultiSegmentState } from './map-utils'
 import { executeTaskCreate, executeTaskDelete, executeTaskUpdate, executeTaskQuery, executeTaskComplete } from './task.tool'
 import { executeTaxiCall, executeTaxiStatus } from './taxi.tool'
 import { executeTimeCheck, executeCalendarCheck } from './time.tool'
+import { executeTripPlan } from './trip.tool'
 import type { UserLocation } from './types'
 import type { ToolResult } from './definitions'
 
@@ -54,6 +55,8 @@ export async function executeTool(
       return executeTimeCheck(args, userId)
     case 'calendar_check':
       return executeCalendarCheck(args, userId)
+    case 'trip_plan':
+      return executeTripPlan(args, userId, userLocation)
     default:
       return { success: false, error: `未知工具: ${toolName}` }
   }

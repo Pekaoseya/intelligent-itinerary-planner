@@ -22,10 +22,29 @@ export interface PendingTask {
   status?: string
   is_expired?: boolean
   conflictWarning?: string      // 冲突警告
+  description?: string          // 任务描述（行程规划时使用）
 }
 
 // 确认类型
-export type ConfirmType = 'batch_add' | 'batch_delete' | 'modify'
+export type ConfirmType = 'batch_add' | 'batch_delete' | 'modify' | 'trip_plan'
+
+// 行程路线信息
+export interface RouteInfo {
+  id: string
+  name: string
+  totalDistance: number
+  totalDuration: number
+  totalCost?: number
+  segments: Array<{
+    mode: 'taxi' | 'train' | 'flight' | 'walking'
+    origin: { name: string }
+    destination: { name: string }
+    distance: number
+    duration: number
+    cost?: number
+  }>
+  highlights?: string[]
+}
 
 // 确认组件 Props
 export interface ConfirmModalProps {
@@ -38,10 +57,15 @@ export interface ConfirmModalProps {
   // 单个任务更新
   originalTask?: PendingTask
   updatedTask?: PendingTask
+  // 行程规划
+  routes?: RouteInfo[]
+  summary?: string
+  reasoning?: string[]
   // 回调
   onConfirmBatchAdd: () => void
   onConfirmBatchDelete: () => void
   onConfirmModify: () => void
+  onConfirmTripPlan: () => void
   onCancel: () => void
 }
 

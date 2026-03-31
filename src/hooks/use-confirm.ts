@@ -22,11 +22,15 @@ export interface UseConfirmResult {
   pendingDeleteIds: string[]
   originalTask: any | null
   updatedTask: any | null
+  routes: any[]
+  summary: string
+  reasoning: string[]
   
   // 操作
   confirmBatchAdd: () => Promise<void>
   confirmBatchDelete: () => Promise<void>
   confirmModify: () => Promise<void>
+  confirmTripPlan: () => Promise<void>
   cancelConfirm: () => void
 }
 
@@ -41,6 +45,9 @@ export function useConfirm(options: UseConfirmOptions = {}): UseConfirmResult {
     pendingDeleteIds,
     originalTask,
     updatedTask,
+    routes,
+    summary,
+    reasoning,
     hide: hideConfirmModal,
     clearPendingTasks,
     clearPendingDeleteTasks,
@@ -144,13 +151,49 @@ export function useConfirm(options: UseConfirmOptions = {}): UseConfirmResult {
     }
   }, [updatedTask, onScrollToBottom, setLoading, addMessage, hideConfirmModal, clearAll])
   
+  // 确认行程规划
+  const confirmTripPlan = useCallback(async () => {
+    if (pendingTasks.length === 0) return
+    
+    try {
+      setLoading(true)
+      console.log('[useConfirm] 确认行程规划:', pendingTasks.length, '个任务')
+      
+      const result = await taskService.batchCreateTasks(pendingTasks)
+      const createdCount = result.createdCount || pendingTasks.length
+      
+      Taro.showToast({ title: `已创建 ${createdCount} 个行程任务`, icon: 'success' })
+      
+      // 生成行程摘要
+      const taskSummary = pendingTasks.map((t, i) => `${i + 1}. ${t.title}`).join('\n')
+      
+      addMessage({
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `✅ 行程规划已完成，已创建 ${createdCount} 个任务：\n${taskSummary}`,
+        timestamp: new Date(),
+      })
+      
+      hideConfirmModal()
+      clearAll()
+      onScrollToBottom?.()
+    } catch (error) {
+      console.error('[useConfirm] 行程规划确认失败:', error)
+      Taro.showToast({ title: '创建失败', icon: 'error' })
+    } finally {
+      setLoading(false)
+    }
+  }, [pendingTasks, onScrollToBottom, setLoading, addMessage, hideConfirmModal, clearAll])
+  
   // 取消确认
   const cancelConfirm = useCallback(() => {
     console.log('[useConfirm] 用户取消操作')
     
     // 根据操作类型生成取消消息
     let cancelMessage = '操作已取消'
-    if (confirmType === 'batch_add' && pendingTasks.length > 0) {
+    if (confirmType === 'trip_plan') {
+      cancelMessage = '已取消行程规划'
+    } else if (confirmType === 'batch_add' && pendingTasks.length > 0) {
       cancelMessage = `已取消添加 ${pendingTasks.length} 个日程`
     } else if (confirmType === 'batch_delete' && pendingDeleteTasks.length > 0) {
       cancelMessage = `已取消删除 ${pendingDeleteTasks.length} 个日程`
@@ -178,9 +221,13 @@ export function useConfirm(options: UseConfirmOptions = {}): UseConfirmResult {
     pendingDeleteIds,
     originalTask,
     updatedTask,
+    routes,
+    summary,
+    reasoning,
     confirmBatchAdd,
     confirmBatchDelete,
     confirmModify,
+    confirmTripPlan,
     cancelConfirm,
   }
 }

@@ -16,6 +16,24 @@ export interface ToolResult {
   }
 }
 
+// 行程路线信息
+export interface RouteInfo {
+  id: string
+  name: string
+  totalDistance: number
+  totalDuration: number
+  totalCost?: number
+  segments: Array<{
+    mode: 'taxi' | 'train' | 'flight' | 'walking'
+    origin: { name: string }
+    destination: { name: string }
+    distance: number
+    duration: number
+    cost?: number
+  }>
+  highlights?: string[]
+}
+
 export interface MessageData {
   // 任务相关
   task?: Task
@@ -26,7 +44,7 @@ export interface MessageData {
   // 确认流程
   needConfirm?: boolean
   needConfirmation?: boolean
-  confirmType?: 'batch_add' | 'batch_delete' | 'modify'
+  confirmType?: 'batch_add' | 'batch_delete' | 'modify' | 'trip_plan'
   
   // 批量创建
   pendingTasks?: import('@/components/confirmation').PendingTask[]
@@ -41,6 +59,12 @@ export interface MessageData {
   originalTask?: import('@/components/confirmation').PendingTask
   updatedTask?: import('@/components/confirmation').PendingTask
   updates?: Record<string, unknown>
+  
+  // 行程规划
+  routes?: RouteInfo[]
+  recommendedIndex?: number
+  summary?: string
+  reasoning?: string[]
 }
 
 export interface Message {
