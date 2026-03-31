@@ -1,4 +1,4 @@
-import { pgTable, serial, timestamp, varchar, text, boolean, integer, jsonb, index } from "drizzle-orm/pg-core"
+import { pgTable, serial, timestamp, varchar, text, boolean, integer, jsonb, index, decimal } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 // 系统表 - 禁止删除或修改
@@ -7,7 +7,59 @@ export const healthCheck = pgTable("health_check", {
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
 })
 
-// 1. 任务表（统一模型）
+// 1. 位置缓存表
+export const locationCache = pgTable(
+	"location_cache",
+	{
+		id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+		name: varchar("name", { length: 500 }).notNull().unique(),
+		address: text("address"),
+		latitude: varchar("latitude", { length: 50 }).notNull(),
+		longitude: varchar("longitude", { length: 50 }).notNull(),
+		city: varchar("city", { length: 100 }),
+		province: varchar("province", { length: 100 }),
+		source: varchar("source", { length: 50 }).default('api'),
+		polyline: text("polyline"),
+		created_at: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+		updated_at: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_location_cache_name").on(table.name),
+		index("idx_location_cache_city").on(table.city),
+		index("idx_location_cache_source").on(table.source),
+	]
+)
+
+// 2. 推荐表
+export const recommendations = pgTable(
+	"recommendations",
+	{
+		id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+		user_id: varchar("user_id", { length: 255 }).notNull().default('default-user'),
+		type: varchar("type", { length: 50 }).notNull(),
+		title: varchar("title", { length: 500 }).notNull(),
+		description: text("description"),
+		rating: varchar("rating", { length: 10 }),
+		distance: varchar("distance", { length: 50 }),
+		price: varchar("price", { length: 50 }),
+		tags: text("tags").array(),
+		location_name: varchar("location_name", { length: 500 }),
+		location_address: text("location_address"),
+		latitude: text("latitude"),
+		longitude: text("longitude"),
+		is_favorite: boolean("is_favorite").default(false),
+		metadata: jsonb("metadata").default({}),
+		created_at: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+		updated_at: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_recommendations_user_id").on(table.user_id),
+		index("idx_recommendations_type").on(table.type),
+		index("idx_recommendations_is_favorite").on(table.is_favorite),
+	]
+)
+
+// 3. 任务表（统一模型）
 export const tasks = pgTable(
 	"tasks",
 	{
@@ -43,7 +95,7 @@ export const tasks = pgTable(
 	]
 )
 
-// 2. 任务事件表（记录所有操作）
+// 4. 任务事件表（记录所有操作）
 export const taskEvents = pgTable(
 	"task_events",
 	{
@@ -63,7 +115,7 @@ export const taskEvents = pgTable(
 	]
 )
 
-// 3. 工具调用日志表
+// 5. 工具调用日志表
 export const toolCalls = pgTable(
 	"tool_calls",
 	{
@@ -81,10 +133,11 @@ export const toolCalls = pgTable(
 	(table) => [
 		index("idx_tool_calls_user_id").on(table.user_id),
 		index("idx_tool_calls_conversation_id").on(table.conversation_id),
+		index("idx_tool_calls_tool_name").on(table.tool_name),
 	]
 )
 
-// 4. 对话表（保留聊天记录）
+// 6. 对话表（保留聊天记录）
 export const conversations = pgTable(
 	"conversations",
 	{
@@ -93,10 +146,13 @@ export const conversations = pgTable(
 		title: varchar("title", { length: 255 }),
 		created_at: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 		updated_at: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	}
+	},
+	(table) => [
+		index("idx_conversations_user_id").on(table.user_id),
+	]
 )
 
-// 5. 消息表
+// 7. 消息表
 export const messages = pgTable(
 	"messages",
 	{
