@@ -7,7 +7,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { LLMClient, Config } from 'coze-coding-dev-sdk'
 import { getSupabaseClient } from '../../storage/database/supabase-client'
 import { TOOLS, TOOL_NAMES, ToolResult } from './tools/definitions'
-import { executeTool, resetMultiSegmentState } from './tools/executor'
+import { executeTool, resetMultiSegmentState } from './tools'
 
 // 用户位置信息
 interface UserLocation {
