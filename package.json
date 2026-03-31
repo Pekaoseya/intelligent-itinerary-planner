@@ -24,7 +24,10 @@
     "preview:tt": "taro build --type tt --preview",
     "preview:weapp": "taro build --type weapp --preview",
     "tsc": "npx tsc --noEmit --skipLibCheck",
-    "validate": "pnpm exec concurrently --kill-others-on-fail --kill-signal SIGKILL -n lint,tsc -c red,blue \"pnpm lint:build\" \"pnpm tsc\""
+    "validate": "pnpm exec concurrently --kill-others-on-fail --kill-signal SIGKILL -n lint,tsc -c red,blue \"pnpm lint:build\" \"pnpm tsc\"",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "lint-staged": {
     "src/**/*.{js,jsx,ts,tsx}": [
@@ -68,6 +71,9 @@
     "@tarojs/plugin-generator": "4.1.9",
     "@tarojs/plugin-mini-ci": "^4.1.9",
     "@tarojs/vite-runner": "4.1.9",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/jest": "^30.0.0",
     "@types/minimatch": "^5",
     "@types/react": "^18.0.0",
     "@vitejs/plugin-react": "^4.3.0",
@@ -79,6 +85,7 @@
     "eslint-plugin-react": "^7.34.1",
     "eslint-plugin-react-hooks": "^4.4.0",
     "eslint-plugin-tailwindcss": "^3.18.2",
+    "jest": "^30.3.0",
     "less": "^4.2.0",
     "lint-staged": "^16.1.2",
     "miniprogram-ci": "^2.1.26",
@@ -89,6 +96,7 @@
     "stylelint-config-standard": "^38.0.0",
     "tailwindcss": "^4.1.18",
     "terser": "^5.30.4",
+    "ts-jest": "^29.4.6",
     "tt-ide-cli": "^0.1.31",
     "typescript": "^5.4.5",
     "vite": "^4.2.0",
