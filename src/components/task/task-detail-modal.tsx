@@ -187,7 +187,7 @@ export const TaskDetailModal: FC<TaskDetailModalProps> = ({
                     <Text className="text-sm text-gray-500 mt-2" style={{ wordBreak: 'break-all', textAlign: 'center' }}>
                       {task.location_name || '--'} → {task.destination_name || '--'}
                     </Text>
-                    {task.metadata?.distance && (
+                    {task.metadata?.distance !== undefined && (
                       <Text className="text-xs text-gray-400 mt-1">
                         约 {((task.metadata.distance as number) / 1000).toFixed(1)} 公里
                       </Text>
@@ -198,7 +198,7 @@ export const TaskDetailModal: FC<TaskDetailModalProps> = ({
 
               {/* 路程信息 */}
               <View className="flex items-center justify-around mt-3 py-2 bg-gray-50 rounded-lg" style={{ width: '100%', maxWidth: '100vw' }}>
-                {task.metadata?.distance && (
+                {task.metadata?.distance !== undefined && (
                   <View className="flex flex-col items-center">
                     <Text className="text-lg font-bold text-blue-500">
                       {((task.metadata.distance as number) / 1000).toFixed(1)}km
@@ -206,7 +206,7 @@ export const TaskDetailModal: FC<TaskDetailModalProps> = ({
                     <Text className="text-xs text-gray-500">距离</Text>
                   </View>
                 )}
-                {task.metadata?.duration && (
+                {task.metadata?.duration !== undefined && (
                   <View className="flex flex-col items-center">
                     <Text className="text-lg font-bold text-green-500">
                       {Math.round((task.metadata.duration as number) / 60)}分钟
@@ -214,10 +214,10 @@ export const TaskDetailModal: FC<TaskDetailModalProps> = ({
                     <Text className="text-xs text-gray-500">预计</Text>
                   </View>
                 )}
-                {task.metadata?.cost && (
+                {task.metadata?.cost !== undefined && (
                   <View className="flex flex-col items-center">
                     <Text className="text-lg font-bold text-orange-500">
-                      ¥{task.metadata.cost}
+                      ¥{task.metadata.cost as string | number}
                     </Text>
                     <Text className="text-xs text-gray-500">预估费用</Text>
                   </View>

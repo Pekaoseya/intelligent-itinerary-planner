@@ -27,13 +27,11 @@ export function useLocation() {
       // 获取坐标
       const { latitude, longitude } = await Taro.getLocation({ type: 'gcj02' })
       
-      // 逆地理编码
-      const res = await Taro.requestReverseGeocoder({ latitude, longitude })
-      
+      // 简单处理：只保存坐标，名称由外部调用者处理
       setLocation({
         latitude,
         longitude,
-        name: `${res.result.address_components.street}${res.result.address_components.street_number}`,
+        name: '当前位置',
       })
     } catch (err) {
       console.error('定位失败:', err)
