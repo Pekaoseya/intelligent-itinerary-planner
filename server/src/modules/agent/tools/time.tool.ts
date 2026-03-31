@@ -4,6 +4,7 @@
 
 import { getSupabaseClient } from '../../../storage/database/supabase-client'
 import { ToolResult } from './definitions'
+import { getDayRange, getDateRangeQuery } from './date-utils'
 
 const supabase = getSupabaseClient()
 
@@ -62,14 +63,11 @@ export async function executeCalendarCheck(args: any, userId: string): Promise<T
   let query = supabase.from('tasks').select('*').eq('user_id', userId)
 
   if (date) {
-    // 使用本地时区（+08:00）进行日期查询
-    const startOfDay = `${date}T00:00:00+08:00`
-    const endOfDay = `${date}T23:59:59+08:00`
-    query = query.gte('scheduled_time', startOfDay).lte('scheduled_time', endOfDay)
+    const range = getDayRange(date)
+    query = query.gte('scheduled_time', range.start).lte('scheduled_time', range.end)
   } else if (time_range) {
-    // 使用本地时区（+08:00）进行时间范围查询
-    if (time_range.start) query = query.gte('scheduled_time', `${time_range.start}T00:00:00+08:00`)
-    if (time_range.end) query = query.lte('scheduled_time', `${time_range.end}T23:59:59+08:00`)
+    const range = getDateRangeQuery(time_range.start, time_range.end)
+    query = query.gte('scheduled_time', range.start).lte('scheduled_time', range.end)
   }
 
   const { data: tasks, error } = await query.order('scheduled_time', { ascending: true })

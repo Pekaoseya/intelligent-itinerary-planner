@@ -4,6 +4,7 @@
 
 import { getSupabaseClient } from '../../../storage/database/supabase-client'
 import type { TaskType } from './types'
+import { getDayRange } from './date-utils'
 
 const supabase = getSupabaseClient()
 
@@ -83,18 +84,17 @@ export async function checkTimeConflict(
   const newStart = scheduledTime.getTime()
   const newEnd = newStart + duration * 60 * 1000
 
-  // 使用本地时区（+08:00）进行日期查询
+  // 使用统一工具函数获取日期范围
   const dateStr = scheduledTime.toISOString().split('T')[0]
-  const startOfDay = `${dateStr}T00:00:00+08:00`
-  const endOfDay = `${dateStr}T23:59:59+08:00`
+  const range = getDayRange(dateStr)
 
   const { data: tasks, error } = await supabase
     .from('tasks')
     .select('*')
     .eq('user_id', userId)
     .eq('status', 'pending')
-    .gte('scheduled_time', startOfDay)
-    .lte('scheduled_time', endOfDay)
+    .gte('scheduled_time', range.start)
+    .lte('scheduled_time', range.end)
 
   if (error || !tasks) {
     console.warn('[checkTimeConflict] 查询失败:', error)
