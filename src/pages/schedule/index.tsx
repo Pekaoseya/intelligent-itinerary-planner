@@ -132,6 +132,13 @@ const SchedulePage: FC = () => {
   // 统计
   const completedCount = selectedDateTasks.filter(t => t.status === 'completed').length
   const pendingCount = selectedDateTasks.filter(t => t.status !== 'completed').length
+  
+  // 计算底部安全高度（TabBar + 安全区域）
+  const tabBarHeight = 50
+  const safeAreaBottom = systemInfo.safeArea?.bottom || systemInfo.windowHeight
+  const screenHeight = systemInfo.screenHeight
+  const safeBottom = screenHeight - safeAreaBottom
+  const bottomSafeHeight = tabBarHeight + safeBottom
 
   return (
     <View
@@ -232,8 +239,12 @@ const SchedulePage: FC = () => {
           bottom: 0,
           left: 0,
           right: 0,
+          width: '100%',
+          maxWidth: '100vw',
           backgroundColor: '#fff',
-          zIndex: 100
+          paddingBottom: `${bottomSafeHeight}px`,
+          zIndex: 100,
+          boxSizing: 'border-box'
         }}
       >
         <Button className="w-full" onClick={() => Taro.switchTab({ url: '/pages/index/index' })}>

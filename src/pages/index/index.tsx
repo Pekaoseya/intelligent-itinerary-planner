@@ -80,7 +80,7 @@ const Index: FC = () => {
   return (
     <View
       className="flex flex-col overflow-hidden bg-gray-50 safe-container"
-      style={{ width: '100%', height: '100%', backgroundColor: '#f5f5f5', boxSizing: 'border-box', overflow: 'hidden' }}
+      style={{ width: '100%', maxWidth: '100vw', height: '100%', backgroundColor: '#f5f5f5', boxSizing: 'border-box', overflow: 'hidden', overflowX: 'hidden' }}
     >
       {/* 定位栏 */}
       <LocationBar
