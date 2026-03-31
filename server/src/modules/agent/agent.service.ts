@@ -8,32 +8,13 @@ import { LLMClient, Config } from 'coze-coding-dev-sdk'
 import { getSupabaseClient } from '../../storage/database/supabase-client'
 import { TOOLS, TOOL_NAMES, ToolResult } from './tools/definitions'
 import { executeTool, resetMultiSegmentState } from './tools'
+import { UserContextService } from '../user-context/user-context.service'
 
 // 用户位置信息
 interface UserLocation {
   latitude: number
   longitude: number
   name?: string
-}
-
-// 用户统计数据
-interface UserStats {
-  travel: {
-    total_trips: number
-    by_type: { taxi: number; train: number; flight: number }
-    top_locations: { name: string; count: number }[]
-    time_distribution: { morning: number; afternoon: number; evening: number; night: number }
-  } | null
-  schedule: {
-    total_tasks: number
-    completed: number
-    completion_rate: number
-    by_type: Record<string, number>
-  } | null
-  preferences: {
-    default_travel_type: string
-    reminder_minutes: number
-  } | null
 }
 
 interface AgentMessage {
@@ -73,7 +54,7 @@ export class AgentService {
   private supabase = getSupabaseClient()
   private readonly logger = new Logger(AgentService.name)
 
-  constructor() {
+  constructor(private readonly userContextService: UserContextService) {
     const config = new Config()
     this.llmClient = new LLMClient(config)
   }
@@ -81,88 +62,6 @@ export class AgentService {
   /**
    * 获取用户统计数据（用于 RAG 增强）
    */
-  private async getUserStats(userId: string): Promise<UserStats> {
-    try {
-      // 获取所有任务
-      const { data: tasks } = await this.supabase
-        .from('tasks')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      const allTasks = tasks || []
-
-      // 出行统计
-      const travelTasks = allTasks.filter(t => ['taxi', 'train', 'flight'].includes(t.type))
-      const travelByType = {
-        taxi: travelTasks.filter(t => t.type === 'taxi').length,
-        train: travelTasks.filter(t => t.type === 'train').length,
-        flight: travelTasks.filter(t => t.type === 'flight').length,
-      }
-
-      // 常去地点
-      const locationCount: Record<string, number> = {}
-      allTasks.forEach(task => {
-        if (task.destination_name) {
-          locationCount[task.destination_name] = (locationCount[task.destination_name] || 0) + 1
-        }
-      })
-      const topLocations = Object.entries(locationCount)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([name, count]) => ({ name, count }))
-
-      // 时段分布
-      const timeDistribution = { morning: 0, afternoon: 0, evening: 0, night: 0 }
-      allTasks.forEach(task => {
-        const date = new Date(task.scheduled_time)
-        const hour = date.getHours()
-        if (hour >= 6 && hour < 12) timeDistribution.morning++
-        else if (hour >= 12 && hour < 18) timeDistribution.afternoon++
-        else if (hour >= 18 && hour < 24) timeDistribution.evening++
-        else timeDistribution.night++
-      })
-
-      // 日程统计
-      const totalTasks = allTasks.length
-      const completedTasks = allTasks.filter(t => t.status === 'completed').length
-
-      // 类型分布
-      const typeDistribution: Record<string, number> = {}
-      allTasks.forEach(task => {
-        typeDistribution[task.type] = (typeDistribution[task.type] || 0) + 1
-      })
-
-      // 获取用户偏好
-      const { data: preferences } = await this.supabase
-        .from('user_preferences')
-        .select('*')
-        .eq('user_id', userId)
-        .single()
-
-      return {
-        travel: {
-          total_trips: travelTasks.length,
-          by_type: travelByType,
-          top_locations: topLocations,
-          time_distribution: timeDistribution,
-        },
-        schedule: {
-          total_tasks: totalTasks,
-          completed: completedTasks,
-          completion_rate: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
-          by_type: typeDistribution,
-        },
-        preferences: preferences ? {
-          default_travel_type: preferences.default_travel_type || 'taxi',
-          reminder_minutes: preferences.reminder_minutes || 30,
-        } : null,
-      }
-    } catch (error) {
-      this.logger.error('获取用户统计失败:', error)
-      return { travel: null, schedule: null, preferences: null }
-    }
-  }
-
   /**
    * 获取或创建用户的当前对话
    */
@@ -279,14 +178,15 @@ export class AgentService {
     // =============================================
     const conversationId = await this.getOrCreateConversation(userId)
     const historyMessages = await this.loadRecentMessages(conversationId, 10)
-    const userStats = await this.getUserStats(userId)
+    // 获取用户上下文（用于 AI 模型）
+    const userContextText = await this.userContextService.getModelContext(userId)
     
     this.logger.log(`[Agent] 加载了 ${historyMessages.length} 条历史消息`)
 
     // =============================================
     // Step 2: 构建系统提示词（含用户偏好参考）
     // =============================================
-    const systemPrompt = this.buildSystemPrompt(userId, userLocation, userStats)
+    const systemPrompt = this.buildSystemPrompt(userId, userLocation, userContextText)
 
     // 构建消息列表：系统提示 + 历史消息 + 当前消息
     const messages: AgentMessage[] = [
@@ -519,7 +419,7 @@ ${toolResultsSummary}
   /**
    * 构建系统提示词
    */
-  private buildSystemPrompt(userId: string, userLocation?: UserLocation, userStats?: UserStats): string {
+  private buildSystemPrompt(userId: string, userLocation?: UserLocation, userContextText?: string): string {
     const now = new Date()
     const today = now.toISOString().split('T')[0]
     const time = now.toTimeString().slice(0, 5)
@@ -543,55 +443,8 @@ ${toolResultsSummary}
 - 地点名称: ${userLocation.name || '当前位置'}`
       : '- 未获取到位置（使用默认位置：杭州西湖）'
 
-    // 用户统计数据 - 用于 RAG 增强
-    let userContextSection = ''
-    if (userStats) {
-      const parts: string[] = []
-      
-      // 出行偏好
-      if (userStats.travel && userStats.travel.total_trips > 0) {
-        const { travel } = userStats
-        const mostUsedType = Object.entries(travel.by_type)
-          .sort((a, b) => b[1] - a[1])[0]
-        const mostUsedTime = Object.entries(travel.time_distribution)
-          .sort((a, b) => b[1] - a[1])[0]
-        const timeNames: Record<string, string> = { morning: '上午', afternoon: '下午', evening: '晚间', night: '凌晨' }
-        
-        parts.push(`- 历史出行 ${travel.total_trips} 次，最常用 ${mostUsedType[0] === 'taxi' ? '打车' : mostUsedType[0] === 'train' ? '高铁' : '飞机'} (${mostUsedType[1]}次)`)
-        if (travel.top_locations.length > 0) {
-          parts.push(`- 常去地点: ${travel.top_locations.slice(0, 3).map(l => l.name).join('、')}`)
-        }
-        parts.push(`- 偏好出行时段: ${timeNames[mostUsedTime[0]] || mostUsedTime[0]}`)
-      }
-      
-      // 日程习惯
-      if (userStats.schedule && userStats.schedule.total_tasks > 0) {
-        const { schedule } = userStats
-        const mostType = Object.entries(schedule.by_type)
-          .sort((a, b) => b[1] - a[1])[0]
-        parts.push(`- 累计任务 ${schedule.total_tasks} 个，完成率 ${schedule.completion_rate}%`)
-        if (mostType) {
-          const typeNames: Record<string, string> = { meeting: '会议', taxi: '打车', train: '高铁', flight: '飞机', dining: '用餐', hotel: '酒店', todo: '事务' }
-          parts.push(`- 最常见任务类型: ${typeNames[mostType[0]] || mostType[0]} (${mostType[1]}次)`)
-        }
-      }
-      
-      // 用户偏好设置
-      if (userStats.preferences) {
-        const typeNames: Record<string, string> = { taxi: '打车', train: '高铁', flight: '飞机' }
-        parts.push(`- 默认出行方式: ${typeNames[userStats.preferences.default_travel_type] || userStats.preferences.default_travel_type}`)
-      }
-      
-      if (parts.length > 0) {
-        userContextSection = `
-## 用户偏好参考（基于历史数据）
-
-${parts.join('\n')}
-
-当用户未明确指定时，可参考以上偏好做推荐。
-`
-      }
-    }
+    // 用户上下文 - 用于 RAG 增强（由 UserContextService 生成）
+    const userContextSection = userContextText || ''
 
     return `你是一个智能任务管理助手。你可以帮助用户管理各种类型的任务：打车、火车、飞机、会议、餐饮、酒店、事务等。
 
