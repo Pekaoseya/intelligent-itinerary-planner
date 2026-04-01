@@ -106,6 +106,22 @@ export function useAI(options: UseAIOptions): UseAIResult {
           onScrollToBottom?.()
         },
         
+        onSubAgentProgress: (data) => {
+          // 子 Agent 进度：实时显示子智能体的思考过程
+          const currentMessages = useChatStore.getState().messages
+          const msg = currentMessages.find(m => m.id === aiMessageId)
+          if (!msg) return
+          
+          // 将子 Agent 进度也添加到 reasoning 中显示
+          const progressText = data.step
+          const newReasoning = [...(msg.reasoning || [])]
+          if (progressText && !newReasoning.includes(progressText)) {
+            newReasoning.push(progressText)
+          }
+          updateMessage(aiMessageId, { reasoning: newReasoning })
+          onScrollToBottom?.()
+        },
+        
         onToolResult: (data) => {
           const currentMessages = useChatStore.getState().messages
           const msg = currentMessages.find(m => m.id === aiMessageId)

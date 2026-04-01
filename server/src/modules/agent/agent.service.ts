@@ -266,7 +266,12 @@ export class AgentService {
         }
         onProgress({ type: 'reasoning', data: { step: `正在${this.getToolDisplayName(toolCall.name)}...` } })
         
-        const result = await executeTool(toolCall.name, toolCall.arguments, userId, userLocation)
+        // 创建子 Agent 进度回调，将进度推送给前端
+        const toolProgressCallback = (event: { type: string; step: string; data?: any }) => {
+          onProgress({ type: 'sub_agent_progress', data: { tool: toolCall.name, ...event } })
+        }
+        
+        const result = await executeTool(toolCall.name, toolCall.arguments, userId, userLocation, toolProgressCallback)
         
         toolResults.push({
           tool: toolCall.name,

@@ -12,6 +12,7 @@ import type {
   SSEEvent,
   StartData,
   ReasoningData,
+  SubAgentProgressData,
   ToolResultData,
   ContentData,
   DoneData,
@@ -60,6 +61,10 @@ export abstract class BaseAdapter implements StreamClient {
       case 'reasoning':
         console.log('[BaseAdapter] 调用 onReasoning, step:', (data as ReasoningData).step)
         callbacks.onReasoning?.(data as ReasoningData)
+        break
+      case 'sub_agent_progress':
+        console.log('[BaseAdapter] 调用 onSubAgentProgress, step:', (data as SubAgentProgressData).step)
+        callbacks.onSubAgentProgress?.(data as SubAgentProgressData)
         break
       case 'tool_result':
         console.log('[BaseAdapter] 调用 onToolResult, tool:', (data as ToolResultData).tool)

@@ -21,9 +21,11 @@ import { executeTimeCheck, executeCalendarCheck } from './time.tool'
 import { executeTripPlan } from './trip.tool'
 import type { UserLocation } from './types'
 import type { ToolResult } from './definitions'
+import type { TripProgressCallback } from './trip-planner.agent'
 
 // 重新导出类型
 export type { UserLocation, ToolResult }
+export type { TripProgressCallback, TripProgressEvent } from './trip-planner.agent'
 
 /**
  * 统一工具执行入口
@@ -32,7 +34,8 @@ export async function executeTool(
   toolName: string,
   args: Record<string, any>,
   userId: string = 'default-user',
-  userLocation?: UserLocation
+  userLocation?: UserLocation,
+  onProgress?: TripProgressCallback
 ): Promise<ToolResult> {
   console.log(`[ToolExecutor] 执行工具: ${toolName}`, args)
 
@@ -56,7 +59,7 @@ export async function executeTool(
     case 'calendar_check':
       return executeCalendarCheck(args, userId)
     case 'trip_plan':
-      return executeTripPlan(args, userId, userLocation)
+      return executeTripPlan(args, userId, userLocation, onProgress)
     default:
       return { success: false, error: `未知工具: ${toolName}` }
   }

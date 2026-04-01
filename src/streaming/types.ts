@@ -10,12 +10,13 @@
  * SSE 事件类型枚举
  */
 export type SSEEventType = 
-  | 'start'           // 开始处理
-  | 'reasoning'       // 思考步骤
-  | 'tool_result'     // 工具执行结果
-  | 'content'         // 内容输出（流式）
-  | 'done'            // 完成
-  | 'error'           // 错误
+  | 'start'               // 开始处理
+  | 'reasoning'           // 思考步骤
+  | 'sub_agent_progress'  // 子 Agent 进度（如行程规划 Agent）
+  | 'tool_result'         // 工具执行结果
+  | 'content'             // 内容输出（流式）
+  | 'done'                // 完成
+  | 'error'               // 错误
 
 /**
  * SSE 事件基础接口
@@ -38,6 +39,22 @@ export interface StartData {
  */
 export interface ReasoningData {
   step: string
+  timestamp?: number
+}
+
+/**
+ * 子 Agent 进度事件数据
+ * 用于显示子智能体（如行程规划 Agent）的实时思考过程
+ */
+export interface SubAgentProgressData {
+  /** 调用该子 Agent 的工具名称 */
+  tool: string
+  /** 进度类型：reasoning(思考中)、tool_call(调用API)、result(返回结果) */
+  type: 'reasoning' | 'tool_call' | 'result'
+  /** 进度描述（带表情符号） */
+  step: string
+  /** 附加数据 */
+  data?: unknown
   timestamp?: number
 }
 
@@ -109,6 +126,8 @@ export interface StreamCallbacks {
   onStart?: (data: StartData) => void
   /** 思考步骤 */
   onReasoning?: (data: ReasoningData) => void
+  /** 子 Agent 进度（实时显示子智能体的思考过程） */
+  onSubAgentProgress?: (data: SubAgentProgressData) => void
   /** 工具执行结果 */
   onToolResult?: (data: ToolResultData) => void
   /** 内容输出（流式） */
