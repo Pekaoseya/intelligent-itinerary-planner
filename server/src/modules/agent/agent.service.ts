@@ -297,7 +297,7 @@ export class AgentService {
         // =============================================
         // 智能重试机制：当工具返回 retryHint 时，让 AI 重新理解参数
         // =============================================
-        if (!result.success && result.data?.retryHint) {
+        if (!result.success && result.retryHint) {
           this.logger.log(`[Agent] 工具 ${toolCall.name} 参数有误，触发智能重试`)
           
           // 构建重试提示，让 AI 理解正确的参数
