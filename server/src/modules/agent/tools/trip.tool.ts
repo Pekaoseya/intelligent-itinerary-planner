@@ -36,23 +36,40 @@ export class TripTool {
     userLocation?: UserLocation
   ): Promise<ToolResult> {
     try {
+      // 参数别名映射（兼容 AI 返回的不同参数名）
+      const normalizedArgs = {
+        ...args,
+        origin: args.origin || (args as any).start || (args as any).from || (args as any).start_location,
+        destination: args.destination || (args as any).end || (args as any).to || (args as any).end_location,
+        departure_time: args.departure_time || (args as any).date || (args as any).time || (args as any).departure_date,
+        preferred_mode: args.preferred_mode || (args as any).preference || (args as any).mode || (args as any).preferred_transport,
+      }
+      
+      console.log('[TripTool] 原始参数:', args)
+      console.log('[TripTool] 映射后参数:', normalizedArgs)
+      
+      // 检查必填参数
+      if (!normalizedArgs.destination) {
+        return { success: false, error: '请提供目的地' }
+      }
+      
       // 构建请求 - 直接传递原始参数，由 LLM 解析
       const request = {
         origin: {
-          name: args.origin || userLocation?.name || '当前位置',
-          coordinate: args.origin ? undefined : userLocation ? {
+          name: normalizedArgs.origin || userLocation?.name || '当前位置',
+          coordinate: normalizedArgs.origin ? undefined : userLocation ? {
             latitude: userLocation.latitude,
             longitude: userLocation.longitude,
           } : undefined,
         },
         destination: {
-          name: args.destination,
+          name: normalizedArgs.destination,
         },
         // 直接传递原始字符串，让 LLM 理解
-        departureTime: args.departure_time,
-        arrivalTime: args.arrival_time,
-        preferredMode: args.preferred_mode,
-        notes: args.notes,
+        departureTime: normalizedArgs.departure_time,
+        arrivalTime: normalizedArgs.arrival_time,
+        preferredMode: normalizedArgs.preferred_mode,
+        notes: normalizedArgs.notes,
         userLocation: userLocation ? {
           latitude: userLocation.latitude,
           longitude: userLocation.longitude,
@@ -135,8 +152,12 @@ export async function executeTripPlan(
   onProgress?: ProgressCallback
 ): Promise<ToolResult> {
   try {
-    // 提取参数
-    const destination = args.destination as string
+    // 参数别名映射（兼容 AI 返回的不同参数名）
+    const origin = (args.origin || args.start || args.from || args.start_location) as string | undefined
+    const destination = (args.destination || args.end || args.to || args.end_location) as string | undefined
+    const departureTime = (args.departure_time || args.date || args.time || args.departure_date) as string | undefined
+    const preferredMode = (args.preferred_mode || args.preference || args.mode || args.preferred_transport) as 'taxi' | 'train' | 'flight' | undefined
+    
     if (!destination) {
       return {
         success: false,
@@ -147,8 +168,8 @@ export async function executeTripPlan(
     // 构建请求 - 直接传递原始参数，让 LLM 理解和解析
     const request = {
       origin: {
-        name: (args.origin as string) || userLocation?.name || '当前位置',
-        coordinate: args.origin ? undefined : userLocation ? {
+        name: origin || userLocation?.name || '当前位置',
+        coordinate: origin ? undefined : userLocation ? {
           latitude: userLocation.latitude,
           longitude: userLocation.longitude,
         } : undefined,
@@ -157,9 +178,9 @@ export async function executeTripPlan(
         name: destination,
       },
       // 直接传递原始字符串，如 "明天下午"，由 LLM 理解
-      departureTime: args.departure_time as string | undefined,
+      departureTime: departureTime,
       arrivalTime: args.arrival_time as string | undefined,
-      preferredMode: args.preferred_mode as 'taxi' | 'train' | 'flight' | undefined,
+      preferredMode: preferredMode,
       notes: args.notes as string | undefined,
       userLocation: userLocation ? {
         latitude: userLocation.latitude,
