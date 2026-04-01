@@ -1,6 +1,10 @@
 /**
  * 任务工具执行器
  * 
+ * 职责：
+ * - 执行具体的任务操作逻辑
+ * - 参数校验由 tools/index.ts 统一处理
+ * 
  * 设计原则：
  * - task_create: 只生成任务参数预览，不写入数据库
  * - task_delete: 只返回待删除任务列表，不真正删除
@@ -11,7 +15,6 @@ import { getSupabaseClient } from '../../../storage/database/supabase-client'
 import { ToolResult } from './definitions'
 import { DEFAULT_LOCATION } from './constants'
 import { getDayRange, getDateRangeQuery } from './date-utils'
-import { validateToolParams, buildRetryMessage } from './param-validator'
 import {
   getCoordinates,
   getLastDestination,
@@ -30,7 +33,7 @@ import type { UserLocation, TaskType, RouteInfo, Coordinate } from './types'
 const supabase = getSupabaseClient()
 
 // =============================================
-// 任务创建预览（不写入数据库）
+// 任务创建预览
 // =============================================
 
 export async function executeTaskCreate(
@@ -38,29 +41,8 @@ export async function executeTaskCreate(
   userId: string,
   userLocation?: UserLocation
 ): Promise<ToolResult> {
-  // 参数别名映射（兼容 AI 返回的不同参数名）
-  const normalizedArgs = {
-    ...args,
-    // title 的别名
-    title: args.title || args.description || args.name || args.subject,
-    // scheduled_time 的别名
-    scheduled_time: args.scheduled_time || args.time || args.start_time || args.datetime,
-    // location_name 的别名
-    location_name: args.location_name || args.location || args.place,
-    // destination_name 的别名
-    destination_name: args.destination_name || args.destination || args.end_location || args.to,
-  }
-
-  const { title, type, scheduled_time, end_time, location_name, location_address, destination_name, destination_address, metadata } = normalizedArgs
-
-  // 参数校验
-  if (!title || !type || !scheduled_time) {
-    console.log('[executeTaskCreate] 参数校验失败:', { title, type, scheduled_time, originalArgs: args })
-    return {
-      success: false,
-      error: '缺少必要参数：title, type, scheduled_time',
-    }
-  }
+  // 参数已由 tools/index.ts 校验
+  const { title, type, scheduled_time, end_time, location_name, location_address, destination_name, destination_address, metadata } = args
 
   const scheduledDate = new Date(scheduled_time)
   const now = new Date()
@@ -108,8 +90,6 @@ export async function executeTaskCreate(
 
   // 获取终点坐标
   let destCoords: Coordinate | null = destination_name ? await getCoordinates(destination_name) : null
-  let destLatitude = destCoords?.latitude ?? null
-  let destLongitude = destCoords?.longitude ?? null
 
   // 获取路线信息
   let routeInfo: RouteInfo | null = null
@@ -169,7 +149,7 @@ export async function executeTaskCreate(
     validationWarnings: validationWarnings.length > 0 ? validationWarnings : undefined,
   }
 
-  // 生成预览数据（不写入数据库）
+  // 生成预览数据
   const previewTask = {
     title,
     type,
@@ -181,18 +161,17 @@ export async function executeTaskCreate(
     longitude: finalOriginCoords?.longitude ?? longitude,
     destination_name: actualDestName || null,
     destination_address: destination_address || null,
-    dest_latitude: finalDestCoords?.latitude ?? destLatitude,
-    dest_longitude: finalDestCoords?.longitude ?? destLongitude,
+    dest_latitude: finalDestCoords?.latitude,
+    dest_longitude: finalDestCoords?.longitude,
     metadata: finalMetadata,
     status: isExpired ? 'expired' : 'pending',
     is_expired: isExpired,
-    // 冲突警告（如果有）
     conflictWarning: conflictCheck.hasConflict && conflictCheck.severity === 'warning' 
       ? `注意：该时间段与现有任务有轻微重叠` 
       : undefined,
   }
 
-  // 更新多段行程状态（用于后续任务的起点）
+  // 更新多段行程状态
   if (actualDestName && finalDestCoords?.latitude && finalDestCoords?.longitude) {
     setLastDestination({
       name: actualDestName,
@@ -209,11 +188,10 @@ export async function executeTaskCreate(
     message += `。提示：${validationWarnings.join('；')}`
   }
 
-  // 返回预览数据，标记为待确认
   return { 
     success: true, 
     data: { 
-      preview: true,  // 标记为预览模式
+      preview: true,
       task: previewTask,
     }, 
     message 
@@ -261,25 +239,12 @@ async function getRouteByType(
 }
 
 // =============================================
-// 任务删除预览（不真正删除）
+// 任务删除预览
 // =============================================
 
 export async function executeTaskDelete(args: any, userId: string): Promise<ToolResult> {
-  console.log('[executeTaskDelete] 原始参数:', JSON.stringify(args, null, 2))
-  
+  // 参数已由 tools/index.ts 校验（必须有 task_id 或 filter）
   const { task_id, filter } = args
-
-  // 智能参数校验 - 必须有 task_id 或 filter
-  if (!task_id && !filter) {
-    const validation = validateToolParams('task_delete', args)
-    if (validation.hint) {
-      return {
-        success: false,
-        error: buildRetryMessage(validation.hint, '删除任务'),
-        data: { retryHint: validation.hint },
-      }
-    }
-  }
 
   // 按ID删除单个任务
   if (task_id) {
@@ -294,7 +259,6 @@ export async function executeTaskDelete(args: any, userId: string): Promise<Tool
       return { success: false, error: '未找到该任务' }
     }
 
-    // 返回预览，不真正删除
     return { 
       success: true, 
       data: { 
@@ -330,7 +294,6 @@ export async function executeTaskDelete(args: any, userId: string): Promise<Tool
     const { data: tasks, error: findError } = await query
     if (findError) return { success: false, error: findError.message }
     if (!tasks?.length) {
-      // 查询用户的现有任务，帮助用户理解
       const { data: allTasks } = await supabase
         .from('tasks')
         .select('id, title, type, scheduled_time, status')
@@ -354,7 +317,6 @@ export async function executeTaskDelete(args: any, userId: string): Promise<Tool
       }
     }
 
-    // 返回预览，不真正删除
     return { 
       success: true, 
       data: { 
@@ -368,14 +330,15 @@ export async function executeTaskDelete(args: any, userId: string): Promise<Tool
     }
   }
 
-  return { success: false, error: '请提供 task_id 或 filter 参数' }
+  return { success: false, error: '参数校验未通过' }
 }
 
 // =============================================
-// 任务更新（暂时保留原有逻辑，后续可改为预览模式）
+// 任务更新
 // =============================================
 
 export async function executeTaskUpdate(args: any, userId: string): Promise<ToolResult> {
+  // 参数已由 tools/index.ts 校验
   const { task_id, filter, updates } = args
 
   let targetTask: any = null
@@ -387,7 +350,6 @@ export async function executeTaskUpdate(args: any, userId: string): Promise<Tool
   } else if (filter?.keyword) {
     const { data, error } = await supabase.from('tasks').select('*').eq('user_id', userId).or(`title.ilike.%${filter.keyword}%,location_name.ilike.%${filter.keyword}%`).limit(1).single()
     if (error || !data) {
-      // 找不到任务时，查询用户的现有任务，帮助用户理解
       const { data: allTasks } = await supabase
         .from('tasks')
         .select('id, title, type, scheduled_time, status')
@@ -402,22 +364,16 @@ export async function executeTaskUpdate(args: any, userId: string): Promise<Tool
         data: {
           suggestion: '您可以先查看当前的任务列表',
           availableTasks: allTasks || [],
-          hint: allTasks && allTasks.length > 0 
-            ? `您当前有 ${allTasks.length} 个任务` 
-            : '您目前没有任何任务'
         }
       }
     }
     targetTask = data
-  } else {
-    return { success: false, error: '请提供 task_id 或 filter.keyword' }
   }
 
   if (targetTask.is_expired) {
     return { success: false, error: '该任务已过期，无法修改' }
   }
 
-  // 返回预览数据
   const updatedTask = {
     ...targetTask,
     ...updates,
@@ -437,7 +393,7 @@ export async function executeTaskUpdate(args: any, userId: string): Promise<Tool
 }
 
 // =============================================
-// 任务查询（保留原有逻辑）
+// 任务查询
 // =============================================
 
 export async function executeTaskQuery(args: any, userId: string): Promise<ToolResult> {
@@ -469,10 +425,11 @@ export async function executeTaskQuery(args: any, userId: string): Promise<ToolR
 }
 
 // =============================================
-// 任务完成（保留原有逻辑）
+// 任务完成
 // =============================================
 
 export async function executeTaskComplete(args: any, userId: string): Promise<ToolResult> {
+  // 参数已由 tools/index.ts 校验
   const { task_id, filter } = args
 
   let targetTask: any = null
@@ -485,8 +442,6 @@ export async function executeTaskComplete(args: any, userId: string): Promise<To
     const { data, error } = await supabase.from('tasks').select('*').eq('user_id', userId).or(`title.ilike.%${filter.keyword}%`).limit(1).single()
     if (error || !data) return { success: false, error: '未找到匹配的任务' }
     targetTask = data
-  } else {
-    return { success: false, error: '请提供 task_id 或 filter' }
   }
 
   const { data: updatedTask, error } = await supabase.from('tasks').update({
@@ -508,7 +463,7 @@ export async function executeTaskComplete(args: any, userId: string): Promise<To
 }
 
 // =============================================
-// 批量创建任务（供确认后调用）
+// 批量操作（供确认后调用）
 // =============================================
 
 export async function executeBatchCreateTasks(
@@ -533,7 +488,6 @@ export async function executeBatchCreateTasks(
     } else {
       results.push(data)
       
-      // 记录事件
       await supabase.from('task_events').insert({
         task_id: data.id,
         user_id: userId,
@@ -560,10 +514,6 @@ export async function executeBatchCreateTasks(
   }
 }
 
-// =============================================
-// 批量删除任务（供确认后调用）
-// =============================================
-
 export async function executeBatchDeleteTasks(
   userId: string,
   taskIds: string[]
@@ -572,7 +522,6 @@ export async function executeBatchDeleteTasks(
     return { success: false, error: '请提供要删除的任务ID' }
   }
 
-  // 查询任务
   const { data: tasks, error: findError } = await supabase
     .from('tasks')
     .select('*')
@@ -582,7 +531,6 @@ export async function executeBatchDeleteTasks(
   if (findError) return { success: false, error: findError.message }
   if (!tasks?.length) return { success: false, error: '未找到任务' }
 
-  // 记录删除事件
   for (const task of tasks) {
     await supabase.from('task_events').insert({
       task_id: task.id,
@@ -592,7 +540,6 @@ export async function executeBatchDeleteTasks(
     })
   }
 
-  // 执行删除
   const { error: deleteError } = await supabase
     .from('tasks')
     .delete()

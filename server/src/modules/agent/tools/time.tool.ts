@@ -1,5 +1,8 @@
 /**
  * 时间和日历工具执行器
+ * 
+ * 职责：执行时间和日历相关操作
+ * 参数校验由 tools/index.ts 统一处理
  */
 
 import { getSupabaseClient } from '../../../storage/database/supabase-client'
@@ -13,14 +16,8 @@ const supabase = getSupabaseClient()
 // =============================================
 
 export async function executeTimeCheck(args: any, userId: string): Promise<ToolResult> {
-  // 参数别名映射（兼容 AI 返回的不同参数名）
-  const normalizedArgs = {
-    ...args,
-    scheduled_time: args.scheduled_time || args.time || args.datetime || args.check_time || args.target_time,
-    duration_minutes: args.duration_minutes || args.duration || args.length || args.minutes,
-  }
-
-  const { scheduled_time, duration_minutes } = normalizedArgs
+  // 参数已由 tools/index.ts 校验
+  const { scheduled_time, duration_minutes } = args
 
   const scheduledDate = new Date(scheduled_time)
   const now = new Date()
@@ -65,14 +62,8 @@ export async function executeTimeCheck(args: any, userId: string): Promise<ToolR
 // =============================================
 
 export async function executeCalendarCheck(args: any, userId: string): Promise<ToolResult> {
-  // 参数别名映射（兼容 AI 返回的不同参数名）
-  const normalizedArgs = {
-    ...args,
-    date: args.date || args.day || args.check_date || args.target_date,
-    time_range: args.time_range || args.range || args.period || args.time_period,
-  }
-
-  const { date, time_range } = normalizedArgs
+  // 参数已由 tools/index.ts 校验
+  const { date, time_range } = args
 
   let query = supabase.from('tasks').select('*').eq('user_id', userId)
 

@@ -1,27 +1,60 @@
 /**
  * AI Agent 工具定义
  * 这些工具可以被 LLM 调用来执行实际操作
+ * 
+ * 设计理念：
+ * - 所有工具元数据集中定义（参数、示例、校验）
+ * - 新增工具只需在此文件添加定义，无需修改其他代码
  */
 
 // =============================================
-// 工具定义（供 LLM 使用）
+// 类型定义
 // =============================================
 
-export const TOOLS = {
+export interface ToolParameter {
+  type: string
+  description: string
+  enum?: string[]
+  required?: boolean
+}
+
+export interface ToolDefinition {
+  name: string
+  description: string
+  parameters: {
+    type: 'object'
+    properties: Record<string, ToolParameter>
+    required?: string[]
+  }
+  // 工具使用示例（帮助 AI 理解正确用法）
+  examples?: Record<string, any>[]
+  // 自定义校验函数（可选，用于复杂校验逻辑）
+  customValidate?: (args: Record<string, any>) => string | null // 返回错误信息，null 表示通过
+}
+
+// =============================================
+// 工具定义
+// =============================================
+
+export const TOOLS: Record<string, ToolDefinition> = {
+  // =============================================
   // 任务管理工具
+  // =============================================
+  
   task_create: {
     name: 'task_create',
     description: '创建一个新任务。支持打车、火车、飞机、会议、餐饮、酒店、事务等类型。',
     parameters: {
       type: 'object',
       properties: {
-        title: { type: 'string', description: '任务标题' },
+        title: { type: 'string', description: '任务标题', required: true },
         type: { 
           type: 'string', 
           enum: ['taxi', 'train', 'flight', 'meeting', 'dining', 'hotel', 'todo', 'other'],
-          description: '任务类型' 
+          description: '任务类型',
+          required: true
         },
-        scheduled_time: { type: 'string', description: '计划时间（ISO格式）' },
+        scheduled_time: { type: 'string', description: '计划时间（ISO格式）', required: true },
         end_time: { type: 'string', description: '结束时间（可选）' },
         location_name: { type: 'string', description: '地点名称' },
         location_address: { type: 'string', description: '地点地址' },
@@ -31,6 +64,10 @@ export const TOOLS = {
       },
       required: ['title', 'type', 'scheduled_time'],
     },
+    examples: [
+      { title: '打车去机场', type: 'taxi', scheduled_time: '2025-01-15T14:00:00+08:00' },
+      { title: '团队周会', type: 'meeting', scheduled_time: '2025-01-15T10:00:00+08:00', location_name: '3号会议室' },
+    ],
   },
 
   task_delete: {
@@ -62,6 +99,20 @@ export const TOOLS = {
         },
         confirm: { type: 'boolean', description: '是否已确认删除' },
       },
+      required: [],
+    },
+    examples: [
+      { task_id: 'abc123' },
+      { filter: { all: true } },
+      { filter: { date: '2025-01-15' } },
+      { filter: { type: 'taxi' } },
+    ],
+    // 自定义校验：必须有 task_id 或 filter
+    customValidate: (args) => {
+      if (!args.task_id && !args.filter) {
+        return '必须提供 task_id 或 filter 参数'
+      }
+      return null
     },
   },
 
@@ -88,9 +139,21 @@ export const TOOLS = {
             status: { type: 'string', enum: ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled'] },
             metadata: { type: 'object' },
           },
-          description: '要更新的字段'
+          description: '要更新的字段',
+          required: true
         },
       },
+      required: ['updates'],
+    },
+    examples: [
+      { task_id: 'abc123', updates: { status: 'completed' } },
+      { filter: { keyword: '晚餐' }, updates: { scheduled_time: '2025-01-15T19:00:00+08:00' } },
+    ],
+    customValidate: (args) => {
+      if (!args.task_id && !args.filter?.keyword) {
+        return '必须提供 task_id 或 filter.keyword'
+      }
+      return null
     },
   },
 
@@ -113,7 +176,12 @@ export const TOOLS = {
         },
         limit: { type: 'number', description: '返回数量限制' },
       },
+      required: [],
     },
+    examples: [
+      { filter: { date: '2025-01-15' } },
+      { filter: { type: 'taxi', include_expired: true } },
+    ],
   },
 
   task_complete: {
@@ -130,22 +198,40 @@ export const TOOLS = {
           },
         },
       },
+      required: [],
+    },
+    examples: [
+      { task_id: 'abc123' },
+      { filter: { keyword: '晚餐' } },
+    ],
+    customValidate: (args) => {
+      if (!args.task_id && !args.filter?.keyword) {
+        return '必须提供 task_id 或 filter.keyword'
+      }
+      return null
     },
   },
 
-  // 打车专用工具
+  // =============================================
+  // 打车工具
+  // =============================================
+  
   taxi_call: {
     name: 'taxi_call',
     description: '呼叫出租车/网约车。创建打车任务并模拟叫车过程。',
     parameters: {
       type: 'object',
       properties: {
-        origin: { type: 'string', description: '出发地（也叫 start、from、pickup）' },
-        destination: { type: 'string', description: '目的地（也叫 end、to、dropoff）' },
-        scheduled_time: { type: 'string', description: '用车时间（也叫 time、datetime、pickup_time）' },
+        origin: { type: 'string', description: '出发地', required: true },
+        destination: { type: 'string', description: '目的地', required: true },
+        scheduled_time: { type: 'string', description: '用车时间' },
       },
       required: ['origin', 'destination'],
     },
+    examples: [
+      { origin: '杭州西溪', destination: '杭州东站' },
+      { origin: '北京国贸', destination: '首都机场', scheduled_time: '2025-01-15T08:00:00+08:00' },
+    ],
   },
 
   taxi_status: {
@@ -154,59 +240,64 @@ export const TOOLS = {
     parameters: {
       type: 'object',
       properties: {
-        task_id: { type: 'string', description: '打车任务ID' },
+        task_id: { type: 'string', description: '打车任务ID', required: true },
       },
+      required: ['task_id'],
     },
+    examples: [
+      { task_id: 'taxi_123' },
+    ],
   },
 
-  // 地图工具
-  map_search: {
-    name: 'map_search',
-    description: '搜索地点。',
-    parameters: {
-      type: 'object',
-      properties: {
-        keyword: { type: 'string', description: '搜索关键词' },
-        city: { type: 'string', description: '城市' },
-      },
-      required: ['keyword'],
-    },
-  },
-
-  // 时间工具
+  // =============================================
+  // 时间和日历工具
+  // =============================================
+  
   time_check: {
     name: 'time_check',
     description: '检查时间冲突或任务是否过期。',
     parameters: {
       type: 'object',
       properties: {
-        scheduled_time: { type: 'string', description: '要检查的时间（也叫 time、datetime、check_time）' },
-        duration_minutes: { type: 'number', description: '持续时长（分钟，也叫 duration、length）' },
+        scheduled_time: { type: 'string', description: '要检查的时间', required: true },
+        duration_minutes: { type: 'number', description: '持续时长（分钟）' },
       },
+      required: ['scheduled_time'],
     },
+    examples: [
+      { scheduled_time: '2025-01-15T14:00:00+08:00' },
+      { scheduled_time: '2025-01-15T14:00:00+08:00', duration_minutes: 60 },
+    ],
   },
 
-  // 日历工具
   calendar_check: {
     name: 'calendar_check',
     description: '检查某天或某时间段的日程安排。',
     parameters: {
       type: 'object',
       properties: {
-        date: { type: 'string', description: '日期（YYYY-MM-DD，也叫 day、check_date）' },
+        date: { type: 'string', description: '日期（YYYY-MM-DD）' },
         time_range: { 
           type: 'object', 
           properties: { 
             start: { type: 'string' }, 
             end: { type: 'string' } 
           },
-          description: '时间范围（也叫 range、period）'
+          description: '时间范围'
         },
       },
+      required: [],
     },
+    examples: [
+      { date: '2025-01-15' },
+      { time_range: { start: '2025-01-15T09:00:00+08:00', end: '2025-01-15T18:00:00+08:00' } },
+    ],
   },
 
+  // =============================================
   // 行程规划工具
+  // =============================================
+  
   trip_plan: {
     name: 'trip_plan',
     description: '智能行程规划。根据起点和终点自动规划最佳路线，拆分为多个任务（如：打车去机场 → 飞往目的地 → 打车到酒店）。支持打车、高铁、飞机等多种交通方式。',
@@ -216,7 +307,8 @@ export const TOOLS = {
         origin: { type: 'string', description: '出发地（可选，默认使用当前位置）' },
         destination: { 
           type: 'string', 
-          description: '目的地（必填！用户说的"去某地"、"到某地"、"某地行程"中的"某地"就是目的地）' 
+          description: '目的地（必填！用户说的"去某地"、"到某地"、"某地行程"中的"某地"就是目的地）',
+          required: true
         },
         departure_time: { type: 'string', description: '出发时间（用户说的"明天"、"下周"等时间）' },
         arrival_time: { type: 'string', description: '期望到达时间（可选）' },
@@ -229,6 +321,11 @@ export const TOOLS = {
       },
       required: ['destination'],
     },
+    examples: [
+      { destination: '上海' },
+      { destination: '北京', departure_time: '明天下午' },
+      { origin: '杭州', destination: '上海', preferred_mode: 'train' },
+    ],
   },
 }
 
@@ -241,7 +338,15 @@ export interface ToolResult {
   data?: any
   error?: string
   message?: string
-  reasoning?: string // AI 可以解释为什么这样执行
+  reasoning?: string
+  // 参数校验失败时的重试提示
+  retryHint?: {
+    toolName: string
+    message: string
+    requiredParams: string[]
+    allParams: Record<string, { type: string; description: string; enum?: string[] }>
+    examples?: Record<string, any>[]
+  }
 }
 
 // =============================================

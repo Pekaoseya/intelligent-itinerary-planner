@@ -4,13 +4,13 @@
  * 功能：
  * - trip_plan: 规划出行路线，自动拆分成多个任务
  * - 使用 TripPlannerAgent（LLM 智能体）进行分析和决策
- * - 不硬编码任何规则，全部由 AI 处理
+ * 
+ * 注意：参数校验由 tools/index.ts 统一处理
  */
 
 import { Injectable } from '@nestjs/common'
 import { ToolResult } from './definitions'
 import { planTripWithAgent } from './trip-planner.agent'
-import { validateToolParams, buildRetryMessage } from './param-validator'
 import { type ProgressCallback } from '../progress'
 import type { UserLocation } from './types'
 
@@ -20,10 +20,6 @@ import type { UserLocation } from './types'
 
 @Injectable()
 export class TripTool {
-  /**
-   * 执行行程规划
-   * 使用 LLM 智能体分析需求、调用 API、拆分任务
-   */
   async executeTripPlan(
     args: {
       origin?: string
@@ -36,140 +32,32 @@ export class TripTool {
     userId: string,
     userLocation?: UserLocation
   ): Promise<ToolResult> {
-    try {
-      // 参数别名映射（兼容 AI 返回的不同参数名）
-      const normalizedArgs = {
-        ...args,
-        origin: args.origin || (args as any).start || (args as any).from || (args as any).start_location,
-        destination: args.destination || (args as any).end || (args as any).to || (args as any).end_location,
-        departure_time: args.departure_time || (args as any).date || (args as any).time || (args as any).departure_date,
-        preferred_mode: args.preferred_mode || (args as any).preference || (args as any).mode || (args as any).preferred_transport,
-      }
-      
-      console.log('[TripTool] 原始参数:', args)
-      console.log('[TripTool] 映射后参数:', normalizedArgs)
-      
-      // 检查必填参数
-      if (!normalizedArgs.destination) {
-        return { success: false, error: '请提供目的地' }
-      }
-      
-      // 构建请求 - 直接传递原始参数，由 LLM 解析
-      const request = {
-        origin: {
-          name: normalizedArgs.origin || userLocation?.name || '当前位置',
-          coordinate: normalizedArgs.origin ? undefined : userLocation ? {
-            latitude: userLocation.latitude,
-            longitude: userLocation.longitude,
-          } : undefined,
-        },
-        destination: {
-          name: normalizedArgs.destination,
-        },
-        // 直接传递原始字符串，让 LLM 理解
-        departureTime: normalizedArgs.departure_time,
-        arrivalTime: normalizedArgs.arrival_time,
-        preferredMode: normalizedArgs.preferred_mode,
-        notes: normalizedArgs.notes,
-        userLocation: userLocation ? {
-          latitude: userLocation.latitude,
-          longitude: userLocation.longitude,
-        } : undefined,
-      }
-
-      // 调用智能体规划行程
-      const result = await planTripWithAgent(request)
-
-      if (!result.success) {
-        return {
-          success: false,
-          error: result.error || '行程规划失败',
-        }
-      }
-
-      // 安全地转换日期
-      const safeFormatDate = (date: Date | undefined | null): string => {
-        if (!date) return ''
-        try {
-          const time = date.getTime()
-          if (isNaN(time)) {
-            const defaultDate = new Date()
-            defaultDate.setDate(defaultDate.getDate() + 1)
-            defaultDate.setHours(14, 0, 0, 0)
-            return defaultDate.toISOString()
-          }
-          return date.toISOString()
-        } catch {
-          return new Date().toISOString()
-        }
-      }
-
-      // 返回预览数据
-      return {
-        success: true,
-        data: {
-          preview: true,
-          confirmType: 'trip_plan',
-          routes: result.routes,
-          recommendedIndex: result.recommendedIndex,
-          splitTasks: result.splitTasks.map((task, index) => ({
-            id: `preview_trip_${index}`,
-            title: task.title,
-            type: task.type,
-            scheduled_time: safeFormatDate(task.scheduledTime),
-            end_time: safeFormatDate(task.endTime),
-            location_name: task.origin?.name,
-            destination_name: task.destination?.name,
-            metadata: task.metadata,
-            description: task.description,
-          })),
-          summary: result.summary,
-          reasoning: result.reasoning,
-        },
-        message: result.summary,
-      }
-    } catch (error) {
-      console.error('[executeTripPlan] 执行失败:', error)
-      return {
-        success: false,
-        error: error.message || '行程规划失败',
-      }
-    }
+    // 参数已由 tools/index.ts 校验，直接执行
+    return executeTripPlanInternal(args, userId, userLocation)
   }
 }
 
 // =============================================
-// 独立执行函数（不依赖注入）
+// 独立执行函数
 // =============================================
 
-/**
- * 执行行程规划（独立函数版本）
- * 直接调用 TripPlannerAgent，让 LLM 处理所有分析
- */
 export async function executeTripPlan(
   args: Record<string, any>,
   userId: string,
   userLocation?: UserLocation,
   onProgress?: ProgressCallback
 ): Promise<ToolResult> {
+  // 参数已由 tools/index.ts 校验，直接执行
+  return executeTripPlanInternal(args, userId, userLocation, onProgress)
+}
+
+async function executeTripPlanInternal(
+  args: Record<string, any>,
+  userId: string,
+  userLocation?: UserLocation,
+  onProgress?: ProgressCallback
+): Promise<ToolResult> {
   try {
-    console.log('[executeTripPlan] 原始参数:', JSON.stringify(args, null, 2))
-    
-    // 智能参数校验 - 不再维护复杂的别名映射
-    // 如果 AI 传错参数名，返回友好提示让它自己理解并重试
-    const validation = validateToolParams('trip_plan', args)
-    if (!validation.valid && validation.hint) {
-      console.log('[executeTripPlan] 参数校验失败，返回智能提示')
-      return {
-        success: false,
-        error: buildRetryMessage(validation.hint, '规划行程'),
-        data: {
-          retryHint: validation.hint,
-        },
-      }
-    }
-    
-    // 使用原始参数（AI 应该已经使用正确的参数名）
     const destination = args.destination as string
     const origin = args.origin as string | undefined
     const departureTime = args.departure_time as string | undefined
@@ -177,9 +65,9 @@ export async function executeTripPlan(
     const preferredMode = args.preferred_mode as 'taxi' | 'train' | 'flight' | undefined
     const notes = args.notes as string | undefined
     
-    console.log('[executeTripPlan] 解析后参数:', { origin, destination, departureTime, preferredMode })
-
-    // 构建请求 - 直接传递原始参数，让 LLM 理解和解析
+    console.log('[executeTripPlan] 参数:', { origin, destination, departureTime, preferredMode })
+    
+    // 构建请求
     const request = {
       origin: {
         name: origin || userLocation?.name || '当前位置',
@@ -191,25 +79,17 @@ export async function executeTripPlan(
       destination: {
         name: destination,
       },
-      // 直接传递原始字符串，如 "明天下午"，由 LLM 理解
       departureTime: departureTime,
-      arrivalTime: args.arrival_time as string | undefined,
+      arrivalTime: arrivalTime,
       preferredMode: preferredMode,
-      notes: args.notes as string | undefined,
+      notes: notes,
       userLocation: userLocation ? {
         latitude: userLocation.latitude,
         longitude: userLocation.longitude,
       } : undefined,
     }
 
-    console.log('[executeTripPlan] 调用智能体规划行程，参数:', {
-      origin: request.origin.name,
-      destination: request.destination.name,
-      departureTime: request.departureTime,
-      preferredMode: request.preferredMode,
-    })
-
-    // 调用智能体，传递进度回调
+    // 调用智能体规划行程
     const result = await planTripWithAgent(request, onProgress)
 
     if (!result.success) {

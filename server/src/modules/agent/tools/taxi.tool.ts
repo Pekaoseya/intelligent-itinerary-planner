@@ -1,5 +1,8 @@
 /**
  * 打车工具执行器
+ * 
+ * 职责：执行打车相关操作
+ * 参数校验由 tools/index.ts 统一处理
  */
 
 import { getSupabaseClient } from '../../../storage/database/supabase-client'
@@ -19,15 +22,8 @@ export async function executeTaxiCall(
   userId: string,
   userLocation?: UserLocation
 ): Promise<ToolResult> {
-  // 参数别名映射（兼容 AI 返回的不同参数名）
-  const normalizedArgs = {
-    ...args,
-    origin: args.origin || args.start || args.from || args.start_location || args.pickup,
-    destination: args.destination || args.end || args.to || args.end_location || args.dropoff,
-    scheduled_time: args.scheduled_time || args.time || args.datetime || args.pickup_time,
-  }
-
-  const { origin, destination, scheduled_time } = normalizedArgs
+  // 参数已由 tools/index.ts 校验
+  const { origin, destination, scheduled_time } = args
 
   // 确定起点名称
   let originName = origin
