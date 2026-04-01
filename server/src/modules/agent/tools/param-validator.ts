@@ -14,6 +14,9 @@
 
 import { TOOLS, ToolDefinition, ToolResult } from './definitions'
 
+// 重新导出校验函数，供 definitions.ts 使用
+export { isValidUUID, isValidDateParam, validateTaskId, validateTaskType, validateTaskStatus, validateScheduledTime, validateTitle, validateLimit, validateKeyword, isValidTransportMode, VALID_TASK_TYPES, VALID_TASK_STATUSES, VALID_TRANSPORT_MODES } from './validators'
+
 /**
  * 校验工具参数
  * 
