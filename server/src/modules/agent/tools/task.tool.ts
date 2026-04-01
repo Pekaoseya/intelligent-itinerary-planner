@@ -314,7 +314,30 @@ export async function executeTaskDelete(args: any, userId: string): Promise<Tool
 
     const { data: tasks, error: findError } = await query
     if (findError) return { success: false, error: findError.message }
-    if (!tasks?.length) return { success: true, data: { preview: true, tasks: [], count: 0 }, message: '没有找到符合条件的任务' }
+    if (!tasks?.length) {
+      // 查询用户的现有任务，帮助用户理解
+      const { data: allTasks } = await supabase
+        .from('tasks')
+        .select('id, title, type, scheduled_time, status')
+        .eq('user_id', userId)
+        .order('scheduled_time', { ascending: true })
+        .limit(10)
+      
+      return { 
+        success: true, 
+        data: { 
+          preview: true, 
+          tasks: [], 
+          count: 0,
+          suggestion: '没有找到符合条件的任务',
+          availableTasks: allTasks || [],
+          hint: allTasks && allTasks.length > 0 
+            ? `您当前有 ${allTasks.length} 个任务可以删除` 
+            : '您目前没有任何任务'
+        }, 
+        message: '没有找到符合条件的任务' 
+      }
+    }
 
     // 返回预览，不真正删除
     return { 
@@ -348,7 +371,28 @@ export async function executeTaskUpdate(args: any, userId: string): Promise<Tool
     targetTask = data
   } else if (filter?.keyword) {
     const { data, error } = await supabase.from('tasks').select('*').eq('user_id', userId).or(`title.ilike.%${filter.keyword}%,location_name.ilike.%${filter.keyword}%`).limit(1).single()
-    if (error || !data) return { success: false, error: '未找到匹配的任务' }
+    if (error || !data) {
+      // 找不到任务时，查询用户的现有任务，帮助用户理解
+      const { data: allTasks } = await supabase
+        .from('tasks')
+        .select('id, title, type, scheduled_time, status')
+        .eq('user_id', userId)
+        .eq('is_expired', false)
+        .order('scheduled_time', { ascending: true })
+        .limit(10)
+      
+      return { 
+        success: false, 
+        error: `未找到包含「${filter.keyword}」的任务`,
+        data: {
+          suggestion: '您可以先查看当前的任务列表',
+          availableTasks: allTasks || [],
+          hint: allTasks && allTasks.length > 0 
+            ? `您当前有 ${allTasks.length} 个任务` 
+            : '您目前没有任何任务'
+        }
+      }
+    }
     targetTask = data
   } else {
     return { success: false, error: '请提供 task_id 或 filter.keyword' }

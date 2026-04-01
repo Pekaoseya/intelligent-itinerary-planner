@@ -510,57 +510,13 @@ ${locationInfo}
 - 明天 = ${tomorrowStr}
 - 后天 = ${dayAfterTomorrowStr}
 
-## 任务删除 (task_delete)
-
-当用户要求删除任务时，直接调用 task_delete 工具：
-
-- "删除所有行程" → task_delete(filter: { all: true })
-- "删除今天的任务" → task_delete(filter: { date: "${today}" })
-- "删除所有打车任务" → task_delete(filter: { type: "taxi" })
-- "删除过期的任务" → task_delete(filter: { expired: true })
-- "删除关于XXX的任务" → task_delete(filter: { keyword: "XXX" })
-
-注意：删除操作会返回待删除任务列表供用户确认，确认后才会真正删除。
-
-## 任务修改 (task_update)
-
-当用户要求修改任务时，按以下步骤操作：
-
-1. **先用 keyword 匹配任务**：task_update(filter: { keyword: "关键词" }, updates: { ... })
-2. **常见修改**：
-   - "把晚餐改到7点" → task_update(filter: { keyword: "晚餐" }, updates: { scheduled_time: "${today}T19:00:00" })
-   - "把会议地点改到XXX" → task_update(filter: { keyword: "会议" }, updates: { location_name: "XXX" })
-   - "取消明天的飞机" → task_update(filter: { keyword: "飞机" }, updates: { status: "cancelled" })
-
-注意：修改操作会返回修改预览供用户确认。
-
 ## 可用工具
 
 ${TOOL_NAMES.map(t => `- ${t.name}: ${t.description}`).join('\n')}
 
 ## 响应格式
 
-以 JSON 格式回复，包含以下字段：
-- reasoning: 思考过程（字符串）
-- tool_calls: 工具调用数组，每个元素包含 name 和 arguments（注意使用 arguments 不是 parameters）
-- content: 直接回复用户的文字（在没有工具调用时使用）
-
-示例响应：
-\`\`\`json
-{
-  "reasoning": "用户想要删除所有行程，我需要调用 task_delete 工具",
-  "tool_calls": [
-    {
-      "name": "task_delete",
-      "arguments": {
-        "filter": { "all": true }
-      }
-    }
-  ]
-}
-\`\`\`
-
-注意：工具调用的参数必须放在 arguments 字段中，不是 parameters。
+以 JSON 格式回复，包含 reasoning（思考过程）、tool_calls（工具调用）、content（直接回复用户）。
 \``
   }
 
