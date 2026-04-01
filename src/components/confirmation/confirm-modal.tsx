@@ -3,9 +3,10 @@
  * 支持批量创建、批量删除、单个更新、行程规划
  * 
  * 已修复真机溢出问题：
- * - ScrollView 添加 maxWidth 和 overflowX 限制
- * - 长文本使用 truncate 截断
- * - 底部按钮使用 fixed 布局确保可见
+ * - ScrollView 使用明确的 px 高度
+ * - 所有容器添加 maxWidth 和 overflowX 限制
+ * - 底部按钮使用 flex-shrink-0 防止被压缩
+ * - ScrollView 底部添加 padding 避开按钮区域
  */
 
 import Taro from '@tarojs/taro'
@@ -75,26 +76,6 @@ const formatDuration = (seconds: number) => {
   return `${minutes}分钟`
 }
 
-/**
- * 计算 ScrollView 安全高度
- * 小程序端必须使用明确的 px 高度，不能用 flex-1
- */
-const useScrollViewHeight = (headerHeight: number = 180, bottomButtonHeight: number = 80) => {
-  return useMemo(() => {
-    try {
-      const systemInfo = Taro.getSystemInfoSync()
-      // 屏幕高度 - 头部 - 底部按钮 - TabBar(约50) - 安全边距
-      const tabBarHeight = 50
-      const safeMargin = 20
-      const height = systemInfo.windowHeight - headerHeight - bottomButtonHeight - tabBarHeight - safeMargin
-      return Math.max(height, 200) // 最小 200px
-    } catch {
-      // 降级值
-      return 300
-    }
-  }, [headerHeight, bottomButtonHeight])
-}
-
 // 任务卡片组件
 const TaskCard: FC<{ task: PendingTask }> = ({ task }) => {
   const Icon = getTaskIcon(task.type)
@@ -102,29 +83,29 @@ const TaskCard: FC<{ task: PendingTask }> = ({ task }) => {
   return (
     <View 
       className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg mb-2"
-      style={{ width: '100%', maxWidth: '100%', overflow: 'hidden' }}
+      style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden' }}
     >
       <View className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
         <Icon size={16} color="#3b82f6" />
       </View>
-      <View className="flex-1" style={{ minWidth: 0, overflow: 'hidden' }}>
-        <View className="flex items-center gap-2 mb-1" style={{ maxWidth: '100%' }}>
-          <Text className="text-sm font-medium text-gray-900 truncate">{task.title}</Text>
-          <Text className="text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded flex-shrink-0">
+      <View style={{ flex: 1, minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
+        <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', marginBottom: '4px', maxWidth: '100%' }}>
+          <Text className="text-sm font-medium text-gray-900" style={{ flexShrink: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</Text>
+          <Text className="text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded" style={{ flexShrink: 0 }}>
             {getTaskTypeName(task.type)}
           </Text>
         </View>
-        <View className="flex items-center gap-1 text-xs text-gray-500" style={{ maxWidth: '100%' }}>
-          <Text className="flex-shrink-0">{formatTime(task.scheduled_time)}</Text>
+        <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '4px', maxWidth: '100%' }}>
+          <Text className="text-xs text-gray-500" style={{ flexShrink: 0 }}>{formatTime(task.scheduled_time)}</Text>
           {task.destination_name && (
             <>
-              <Text className="flex-shrink-0">→</Text>
-              <Text className="truncate">{task.destination_name}</Text>
+              <Text className="text-xs text-gray-500" style={{ flexShrink: 0 }}>→</Text>
+              <Text className="text-xs text-gray-500" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.destination_name}</Text>
             </>
           )}
         </View>
         {task.conflictWarning && (
-          <Text className="text-xs text-orange-500 mt-1 block truncate">{task.conflictWarning}</Text>
+          <Text className="text-xs text-orange-500 mt-1" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.conflictWarning}</Text>
         )}
       </View>
     </View>
@@ -139,7 +120,7 @@ const TripTaskCard: FC<{ task: PendingTask; index: number }> = ({ task, index })
   return (
     <View 
       className="flex items-start gap-3 p-3 bg-white border border-gray-100 rounded-lg mb-2 shadow-sm"
-      style={{ width: '100%', maxWidth: '100%', overflow: 'hidden' }}
+      style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden' }}
     >
       {/* 序号 */}
       <View className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center">
@@ -149,20 +130,20 @@ const TripTaskCard: FC<{ task: PendingTask; index: number }> = ({ task, index })
       <View className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
         <Icon size={16} color="#3b82f6" />
       </View>
-      <View className="flex-1" style={{ minWidth: 0, overflow: 'hidden' }}>
-        <Text className="text-sm font-medium text-gray-900 mb-1 block truncate">{task.title}</Text>
-        <View className="flex items-center gap-1 text-xs text-gray-500" style={{ maxWidth: '100%' }}>
+      <View style={{ flex: 1, minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
+        <Text className="text-sm font-medium text-gray-900 mb-1" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</Text>
+        <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '4px', maxWidth: '100%' }}>
           <Clock size={12} color="#999" />
-          <Text className="flex-shrink-0">{formatTimeOnly(task.scheduled_time)}</Text>
+          <Text className="text-xs text-gray-500" style={{ flexShrink: 0 }}>{formatTimeOnly(task.scheduled_time)}</Text>
           {duration && (
             <>
-              <Text className="flex-shrink-0">·</Text>
-              <Text className="flex-shrink-0">{formatDuration(duration)}</Text>
+              <Text className="text-xs text-gray-500" style={{ flexShrink: 0 }}>·</Text>
+              <Text className="text-xs text-gray-500" style={{ flexShrink: 0 }}>{formatDuration(duration)}</Text>
             </>
           )}
         </View>
         {task.description && (
-          <Text className="text-xs text-gray-400 mt-1 block truncate">{task.description}</Text>
+          <Text className="text-xs text-gray-400 mt-1" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.description}</Text>
         )}
       </View>
     </View>
@@ -176,16 +157,16 @@ const ReasoningSection: FC<{ reasoning: string[] }> = ({ reasoning }) => {
   return (
     <View 
       className="bg-blue-50 rounded-lg p-3 mb-4"
-      style={{ width: '100%', maxWidth: '100%', overflow: 'hidden' }}
+      style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden' }}
     >
-      <View className="flex items-center gap-2 mb-2">
+      <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
         <Sparkles size={14} color="#3b82f6" />
         <Text className="text-sm font-medium text-blue-600">AI 规划思路</Text>
       </View>
       {reasoning.map((step, index) => (
-        <View key={index} className="flex items-start gap-2 mb-1" style={{ maxWidth: '100%' }}>
-          <Text className="text-xs text-blue-400 flex-shrink-0">{index + 1}.</Text>
-          <Text className="text-xs text-gray-600 block" style={{ wordBreak: 'break-all' }}>{step}</Text>
+        <View key={index} style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: '8px', marginBottom: '4px', maxWidth: '100%' }}>
+          <Text className="text-xs text-blue-400" style={{ flexShrink: 0 }}>{index + 1}.</Text>
+          <Text className="text-xs text-gray-600" style={{ flex: 1, wordBreak: 'break-word', overflow: 'hidden' }}>{step}</Text>
         </View>
       ))}
     </View>
@@ -202,108 +183,150 @@ const TripPlanConfirm: FC<{
   onCancel: () => void
 }> = ({ tasks, routes, summary, reasoning, onConfirm, onCancel }) => {
   const route = routes[0] // 使用第一个推荐方案
-  const scrollViewHeight = useScrollViewHeight(240, 80) // 头部+路线概览约240px，底部按钮80px
+  
+  // 计算可用高度
+  const scrollViewHeight = useMemo(() => {
+    try {
+      const systemInfo = Taro.getSystemInfoSync()
+      // 弹窗最大高度 85vh，减去头部(140px)和底部按钮(80px)和安全区域
+      const maxModalHeight = systemInfo.windowHeight * 0.85
+      const headerHeight = 140
+      const buttonHeight = 80
+      const safeBottom = 20
+      return Math.max(maxModalHeight - headerHeight - buttonHeight - safeBottom, 200)
+    } catch {
+      return 300
+    }
+  }, [])
   
   return (
-    <View style={{ width: '100%', maxWidth: '100vw', overflow: 'hidden' }}>
-      {/* 标题栏 */}
+    <View 
+      style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        width: '100%', 
+        maxWidth: '100vw', 
+        maxHeight: '85vh',
+        overflow: 'hidden'
+      }}
+    >
+      {/* 标题栏 - flex-shrink-0 不压缩 */}
       <View 
-        className="flex items-center justify-between px-4 py-3 border-b border-gray-100"
-        style={{ width: '100%', maxWidth: '100%' }}
+        style={{ 
+          flexShrink: 0,
+          display: 'flex', 
+          flexDirection: 'row', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          padding: '12px 16px',
+          borderBottomWidth: '1px',
+          borderBottomStyle: 'solid',
+          borderBottomColor: '#f3f4f6',
+          width: '100%',
+          boxSizing: 'border-box'
+        }}
       >
-        <View className="flex items-center gap-2" style={{ maxWidth: 'calc(100% - 40px)' }}>
-          <View className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center flex-shrink-0">
+        <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+          <View className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center" style={{ flexShrink: 0 }}>
             <Route size={18} color="#fff" />
           </View>
-          <Text className="text-lg font-bold truncate">行程规划确认</Text>
-          <Text className="text-sm text-gray-500 flex-shrink-0">({tasks.length}个任务)</Text>
+          <Text className="text-lg font-bold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>行程规划确认</Text>
+          <Text className="text-sm text-gray-500" style={{ flexShrink: 0 }}>({tasks.length}个任务)</Text>
         </View>
-        <Button size="sm" variant="ghost" className="p-1 flex-shrink-0" onClick={onCancel}>
+        <Button size="sm" variant="ghost" style={{ flexShrink: 0, padding: '4px' }} onClick={onCancel}>
           <X size={24} color="#999" />
         </Button>
       </View>
 
-      {/* 路线概览 */}
+      {/* 路线概览 - flex-shrink-0 不压缩 */}
       {route && (
         <View 
-          className="px-4 py-3"
           style={{ 
-            width: '100%', 
+            flexShrink: 0,
+            padding: '12px 16px',
+            width: '100%',
             maxWidth: '100%',
-            background: 'linear-gradient(to right, #eff6ff, #faf5ff)',
-            overflow: 'hidden'
+            boxSizing: 'border-box',
+            overflow: 'hidden',
+            background: 'linear-gradient(to right, #eff6ff, #faf5ff)'
           }}
         >
-          <View className="flex items-center justify-between mb-2" style={{ maxWidth: '100%' }}>
-            <Text className="text-base font-bold text-gray-900 truncate">{route.name}</Text>
+          <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', maxWidth: '100%' }}>
+            <Text className="text-base font-bold text-gray-900" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{route.name}</Text>
             {route.highlights && route.highlights.length > 0 && (
-              <Text className="text-xs text-blue-500 bg-blue-100 px-2 py-1 rounded-full flex-shrink-0">
+              <Text className="text-xs text-blue-500 bg-blue-100 px-2 py-1 rounded-full" style={{ flexShrink: 0, marginLeft: '8px' }}>
                 {route.highlights[0]}
               </Text>
             )}
           </View>
-          <View className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
-            <View className="flex items-center gap-1">
+          <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+            <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '4px' }}>
               <MapPin size={14} color="#666" />
-              <Text>{formatDistance(route.totalDistance)}</Text>
+              <Text className="text-sm text-gray-600">{formatDistance(route.totalDistance)}</Text>
             </View>
-            <View className="flex items-center gap-1">
+            <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '4px' }}>
               <Clock size={14} color="#666" />
-              <Text>{formatDuration(route.totalDuration)}</Text>
+              <Text className="text-sm text-gray-600">{formatDuration(route.totalDuration)}</Text>
             </View>
             {route.totalCost && (
-              <Text className="text-orange-500">约 ¥{route.totalCost}</Text>
+              <Text className="text-sm text-orange-500">约 ¥{route.totalCost}</Text>
             )}
           </View>
         </View>
       )}
 
-      {/* 任务列表 - 使用明确高度 */}
+      {/* 任务列表 - flex-1 自动填充剩余空间，底部留出 padding 避开按钮 */}
       <ScrollView 
         scrollY 
-        className="px-4 py-4"
         style={{ 
+          flex: 1,
           height: `${scrollViewHeight}px`,
           width: '100%',
           maxWidth: '100vw',
-          overflowX: 'hidden'
+          boxSizing: 'border-box',
+          overflowX: 'hidden',
+          padding: '16px',
+          paddingBottom: '100px'  // 关键：底部留出空间避开按钮
         }}
       >
         {/* 思考过程 */}
         <ReasoningSection reasoning={reasoning} />
         
         {/* 摘要 */}
-        <View className="mb-3" style={{ maxWidth: '100%' }}>
-          <Text className="text-sm text-gray-500 block" style={{ wordBreak: 'break-all' }}>{summary}</Text>
+        <View style={{ marginBottom: '12px', width: '100%' }}>
+          <Text className="text-sm text-gray-500" style={{ wordBreak: 'break-word' }}>{summary}</Text>
         </View>
         
         {/* 任务卡片 */}
-        <View className="mb-2">
-          <Text className="text-sm font-medium text-gray-700 mb-2 block">行程安排</Text>
+        <View style={{ marginBottom: '8px', width: '100%' }}>
+          <Text className="text-sm font-medium text-gray-700 mb-2" style={{ display: 'block' }}>行程安排</Text>
         </View>
         {tasks.map((task, index) => (
           <TripTaskCard key={index} task={task} index={index} />
         ))}
       </ScrollView>
 
-      {/* 底部按钮 - fixed 布局确保可见 */}
+      {/* 底部按钮 - flex-shrink-0 不压缩，始终可见 */}
       <View 
-        className="flex gap-3 px-4 py-4 border-t border-gray-100 bg-white"
         style={{ 
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
+          flexShrink: 0,
+          display: 'flex', 
+          flexDirection: 'row', 
+          gap: '12px', 
+          padding: '16px', 
+          borderTopWidth: '1px',
+          borderTopStyle: 'solid',
+          borderTopColor: '#f3f4f6',
+          backgroundColor: '#fff',
           width: '100%',
           maxWidth: '100vw',
-          paddingBottom: 'calc(16px + env(safe-area-inset-bottom))',
-          zIndex: 10
+          boxSizing: 'border-box'
         }}
       >
-        <Button variant="outline" className="flex-1" onClick={onCancel}>
+        <Button variant="outline" style={{ flex: 1 }} onClick={onCancel}>
           <Text className="text-gray-600">取消</Text>
         </Button>
-        <Button className="flex-1 bg-purple-500" onClick={onConfirm}>
+        <Button style={{ flex: 1, backgroundColor: '#a855f7' }} onClick={onConfirm}>
           <Route size={16} color="#fff" />
           <Text className="text-white ml-1">确认创建 ({tasks.length}个)</Text>
         </Button>
@@ -318,23 +341,53 @@ const BatchAddConfirm: FC<{
   onConfirm: () => void
   onCancel: () => void
 }> = ({ tasks, onConfirm, onCancel }) => {
-  const scrollViewHeight = useScrollViewHeight(120, 80) // 头部120px，底部按钮80px
+  const scrollViewHeight = useMemo(() => {
+    try {
+      const systemInfo = Taro.getSystemInfoSync()
+      const maxModalHeight = systemInfo.windowHeight * 0.85
+      const headerHeight = 60
+      const buttonHeight = 80
+      return Math.max(maxModalHeight - headerHeight - buttonHeight - 20, 200)
+    } catch {
+      return 300
+    }
+  }, [])
   
   return (
-    <View style={{ width: '100%', maxWidth: '100vw', overflow: 'hidden' }}>
+    <View 
+      style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        width: '100%', 
+        maxWidth: '100vw', 
+        maxHeight: '85vh',
+        overflow: 'hidden'
+      }}
+    >
       {/* 标题栏 */}
       <View 
-        className="flex items-center justify-between px-4 py-3 border-b border-gray-100"
-        style={{ width: '100%', maxWidth: '100%' }}
+        style={{ 
+          flexShrink: 0,
+          display: 'flex', 
+          flexDirection: 'row', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          padding: '12px 16px',
+          borderBottomWidth: '1px',
+          borderBottomStyle: 'solid',
+          borderBottomColor: '#f3f4f6',
+          width: '100%',
+          boxSizing: 'border-box'
+        }}
       >
-        <View className="flex items-center gap-2" style={{ maxWidth: 'calc(100% - 40px)' }}>
-          <View className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+        <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+          <View className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center" style={{ flexShrink: 0 }}>
             <Plus size={18} color="#fff" />
           </View>
-          <Text className="text-lg font-bold truncate">新增日程确认</Text>
-          <Text className="text-sm text-gray-500 flex-shrink-0">({tasks.length}个)</Text>
+          <Text className="text-lg font-bold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>新增日程确认</Text>
+          <Text className="text-sm text-gray-500" style={{ flexShrink: 0 }}>({tasks.length}个)</Text>
         </View>
-        <Button size="sm" variant="ghost" className="p-1 flex-shrink-0" onClick={onCancel}>
+        <Button size="sm" variant="ghost" style={{ flexShrink: 0, padding: '4px' }} onClick={onCancel}>
           <X size={24} color="#999" />
         </Button>
       </View>
@@ -342,16 +395,19 @@ const BatchAddConfirm: FC<{
       {/* 任务列表 */}
       <ScrollView 
         scrollY 
-        className="px-4 py-4"
         style={{ 
+          flex: 1,
           height: `${scrollViewHeight}px`,
           width: '100%',
           maxWidth: '100vw',
-          overflowX: 'hidden'
+          boxSizing: 'border-box',
+          overflowX: 'hidden',
+          padding: '16px',
+          paddingBottom: '100px'
         }}
       >
-        <View className="mb-3">
-          <Text className="text-sm text-gray-500 block">AI 为您规划了以下行程，确认后将添加到日程</Text>
+        <View style={{ marginBottom: '12px', width: '100%' }}>
+          <Text className="text-sm text-gray-500">AI 为您规划了以下行程，确认后将添加到日程</Text>
         </View>
         {tasks.map((task, index) => (
           <TaskCard key={index} task={task} />
@@ -360,22 +416,25 @@ const BatchAddConfirm: FC<{
 
       {/* 底部按钮 */}
       <View 
-        className="flex gap-3 px-4 py-4 border-t border-gray-100 bg-white"
         style={{ 
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
+          flexShrink: 0,
+          display: 'flex', 
+          flexDirection: 'row', 
+          gap: '12px', 
+          padding: '16px', 
+          borderTopWidth: '1px',
+          borderTopStyle: 'solid',
+          borderTopColor: '#f3f4f6',
+          backgroundColor: '#fff',
           width: '100%',
           maxWidth: '100vw',
-          paddingBottom: 'calc(16px + env(safe-area-inset-bottom))',
-          zIndex: 10
+          boxSizing: 'border-box'
         }}
       >
-        <Button variant="outline" className="flex-1" onClick={onCancel}>
+        <Button variant="outline" style={{ flex: 1 }} onClick={onCancel}>
           <Text className="text-gray-600">取消</Text>
         </Button>
-        <Button className="flex-1 bg-green-500" onClick={onConfirm}>
+        <Button style={{ flex: 1, backgroundColor: '#22c55e' }} onClick={onConfirm}>
           <Plus size={16} color="#fff" />
           <Text className="text-white ml-1">确认添加 ({tasks.length}个)</Text>
         </Button>
@@ -390,23 +449,53 @@ const BatchDeleteConfirm: FC<{
   onConfirm: () => void
   onCancel: () => void
 }> = ({ tasks, onConfirm, onCancel }) => {
-  const scrollViewHeight = useScrollViewHeight(120, 80)
+  const scrollViewHeight = useMemo(() => {
+    try {
+      const systemInfo = Taro.getSystemInfoSync()
+      const maxModalHeight = systemInfo.windowHeight * 0.85
+      const headerHeight = 60
+      const buttonHeight = 80
+      return Math.max(maxModalHeight - headerHeight - buttonHeight - 20, 200)
+    } catch {
+      return 300
+    }
+  }, [])
   
   return (
-    <View style={{ width: '100%', maxWidth: '100vw', overflow: 'hidden' }}>
+    <View 
+      style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        width: '100%', 
+        maxWidth: '100vw', 
+        maxHeight: '85vh',
+        overflow: 'hidden'
+      }}
+    >
       {/* 标题栏 */}
       <View 
-        className="flex items-center justify-between px-4 py-3 border-b border-gray-100"
-        style={{ width: '100%', maxWidth: '100%' }}
+        style={{ 
+          flexShrink: 0,
+          display: 'flex', 
+          flexDirection: 'row', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          padding: '12px 16px',
+          borderBottomWidth: '1px',
+          borderBottomStyle: 'solid',
+          borderBottomColor: '#f3f4f6',
+          width: '100%',
+          boxSizing: 'border-box'
+        }}
       >
-        <View className="flex items-center gap-2" style={{ maxWidth: 'calc(100% - 40px)' }}>
-          <View className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0">
+        <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+          <View className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center" style={{ flexShrink: 0 }}>
             <Trash2 size={18} color="#fff" />
           </View>
-          <Text className="text-lg font-bold truncate">删除日程确认</Text>
-          <Text className="text-sm text-gray-500 flex-shrink-0">({tasks.length}个)</Text>
+          <Text className="text-lg font-bold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>删除日程确认</Text>
+          <Text className="text-sm text-gray-500" style={{ flexShrink: 0 }}>({tasks.length}个)</Text>
         </View>
-        <Button size="sm" variant="ghost" className="p-1 flex-shrink-0" onClick={onCancel}>
+        <Button size="sm" variant="ghost" style={{ flexShrink: 0, padding: '4px' }} onClick={onCancel}>
           <X size={24} color="#999" />
         </Button>
       </View>
@@ -414,16 +503,19 @@ const BatchDeleteConfirm: FC<{
       {/* 任务列表 */}
       <ScrollView 
         scrollY 
-        className="px-4 py-4"
         style={{ 
+          flex: 1,
           height: `${scrollViewHeight}px`,
           width: '100%',
           maxWidth: '100vw',
-          overflowX: 'hidden'
+          boxSizing: 'border-box',
+          overflowX: 'hidden',
+          padding: '16px',
+          paddingBottom: '100px'
         }}
       >
-        <View className="mb-3">
-          <Text className="text-sm text-red-500 block">以下日程将被删除，此操作不可恢复</Text>
+        <View style={{ marginBottom: '12px', width: '100%' }}>
+          <Text className="text-sm text-red-500">以下日程将被删除，此操作不可恢复</Text>
         </View>
         {tasks.map((task, index) => (
           <TaskCard key={task.id || index} task={task} />
@@ -432,22 +524,25 @@ const BatchDeleteConfirm: FC<{
 
       {/* 底部按钮 */}
       <View 
-        className="flex gap-3 px-4 py-4 border-t border-gray-100 bg-white"
         style={{ 
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
+          flexShrink: 0,
+          display: 'flex', 
+          flexDirection: 'row', 
+          gap: '12px', 
+          padding: '16px', 
+          borderTopWidth: '1px',
+          borderTopStyle: 'solid',
+          borderTopColor: '#f3f4f6',
+          backgroundColor: '#fff',
           width: '100%',
           maxWidth: '100vw',
-          paddingBottom: 'calc(16px + env(safe-area-inset-bottom))',
-          zIndex: 10
+          boxSizing: 'border-box'
         }}
       >
-        <Button variant="outline" className="flex-1" onClick={onCancel}>
+        <Button variant="outline" style={{ flex: 1 }} onClick={onCancel}>
           <Text className="text-gray-600">取消</Text>
         </Button>
-        <Button className="flex-1 bg-red-500" onClick={onConfirm}>
+        <Button style={{ flex: 1, backgroundColor: '#ef4444' }} onClick={onConfirm}>
           <Trash2 size={16} color="#fff" />
           <Text className="text-white ml-1">确认删除 ({tasks.length}个)</Text>
         </Button>
@@ -463,24 +558,54 @@ const ModifyConfirm: FC<{
   onConfirm: () => void
   onCancel: () => void
 }> = ({ originalTask: _originalTask, updatedTask, onConfirm, onCancel }) => {
-  const scrollViewHeight = useScrollViewHeight(120, 80)
+  const scrollViewHeight = useMemo(() => {
+    try {
+      const systemInfo = Taro.getSystemInfoSync()
+      const maxModalHeight = systemInfo.windowHeight * 0.85
+      const headerHeight = 60
+      const buttonHeight = 80
+      return Math.max(maxModalHeight - headerHeight - buttonHeight - 20, 200)
+    } catch {
+      return 300
+    }
+  }, [])
   
   if (!updatedTask) return null
   
   return (
-    <View style={{ width: '100%', maxWidth: '100vw', overflow: 'hidden' }}>
+    <View 
+      style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        width: '100%', 
+        maxWidth: '100vw', 
+        maxHeight: '85vh',
+        overflow: 'hidden'
+      }}
+    >
       {/* 标题栏 */}
       <View 
-        className="flex items-center justify-between px-4 py-3 border-b border-gray-100"
-        style={{ width: '100%', maxWidth: '100%' }}
+        style={{ 
+          flexShrink: 0,
+          display: 'flex', 
+          flexDirection: 'row', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          padding: '12px 16px',
+          borderBottomWidth: '1px',
+          borderBottomStyle: 'solid',
+          borderBottomColor: '#f3f4f6',
+          width: '100%',
+          boxSizing: 'border-box'
+        }}
       >
-        <View className="flex items-center gap-2">
-          <View className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
+        <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
+          <View className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center" style={{ flexShrink: 0 }}>
             <Pencil size={18} color="#fff" />
           </View>
           <Text className="text-lg font-bold">修改日程确认</Text>
         </View>
-        <Button size="sm" variant="ghost" className="p-1 flex-shrink-0" onClick={onCancel}>
+        <Button size="sm" variant="ghost" style={{ flexShrink: 0, padding: '4px' }} onClick={onCancel}>
           <X size={24} color="#999" />
         </Button>
       </View>
@@ -488,38 +613,44 @@ const ModifyConfirm: FC<{
       {/* 任务详情 */}
       <ScrollView 
         scrollY 
-        className="px-4 py-4"
         style={{ 
+          flex: 1,
           height: `${scrollViewHeight}px`,
           width: '100%',
           maxWidth: '100vw',
-          overflowX: 'hidden'
+          boxSizing: 'border-box',
+          overflowX: 'hidden',
+          padding: '16px',
+          paddingBottom: '100px'
         }}
       >
-        <View className="mb-3">
-          <Text className="text-sm text-gray-500 block">日程将被修改为以下内容</Text>
+        <View style={{ marginBottom: '12px', width: '100%' }}>
+          <Text className="text-sm text-gray-500">日程将被修改为以下内容</Text>
         </View>
         <TaskCard task={updatedTask} />
       </ScrollView>
 
       {/* 底部按钮 */}
       <View 
-        className="flex gap-3 px-4 py-4 border-t border-gray-100 bg-white"
         style={{ 
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
+          flexShrink: 0,
+          display: 'flex', 
+          flexDirection: 'row', 
+          gap: '12px', 
+          padding: '16px', 
+          borderTopWidth: '1px',
+          borderTopStyle: 'solid',
+          borderTopColor: '#f3f4f6',
+          backgroundColor: '#fff',
           width: '100%',
           maxWidth: '100vw',
-          paddingBottom: 'calc(16px + env(safe-area-inset-bottom))',
-          zIndex: 10
+          boxSizing: 'border-box'
         }}
       >
-        <Button variant="outline" className="flex-1" onClick={onCancel}>
+        <Button variant="outline" style={{ flex: 1 }} onClick={onCancel}>
           <Text className="text-gray-600">取消</Text>
         </Button>
-        <Button className="flex-1 bg-blue-500" onClick={onConfirm}>
+        <Button style={{ flex: 1, backgroundColor: '#3b82f6' }} onClick={onConfirm}>
           <Pencil size={16} color="#fff" />
           <Text className="text-white ml-1">确认修改</Text>
         </Button>
@@ -592,7 +723,6 @@ export const ConfirmModal: FC<ConfirmModalProps> = ({
 
   return (
     <View
-      className="fixed inset-0"
       style={{
         position: 'fixed',
         top: 0,
@@ -603,20 +733,22 @@ export const ConfirmModal: FC<ConfirmModalProps> = ({
         maxWidth: '100vw',
         backgroundColor: 'rgba(0,0,0,0.5)',
         overflow: 'hidden',
-        overflowX: 'hidden',
         zIndex: 200
       }}
     >
       <View
-        className="absolute left-0 right-0 bg-white rounded-t-2xl"
         style={{
+          position: 'absolute',
           bottom: 0,
+          left: 0,
+          right: 0,
           width: '100%',
           maxWidth: '100vw',
+          backgroundColor: '#fff',
+          borderTopLeftRadius: '16px',
+          borderTopRightRadius: '16px',
           maxHeight: '85vh',
-          overflow: 'hidden',
-          overflowX: 'hidden',
-          paddingBottom: 'env(safe-area-inset-bottom)'
+          overflow: 'hidden'
         }}
       >
         {renderContent()}
