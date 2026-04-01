@@ -302,7 +302,25 @@ export class AgentService {
 你之前调用的参数是:
 ${JSON.stringify(toolCall.arguments, null, 2)}
 
-请仔细理解参数说明，然后用正确的参数名重新调用工具。`
+请立即用正确的参数名重新调用工具。
+
+必须返回 JSON 格式的工具调用，例如：
+\`\`\`json
+{
+  "reasoning": "我理解了，应该使用 origin 和 destination 参数",
+  "tool_calls": [
+    {
+      "name": "trip_plan",
+      "arguments": {
+        "origin": "杭州",
+        "destination": "上海"
+      }
+    }
+  ]
+}
+\`\`\`
+
+现在请重新调用工具。`
 
           // 让 AI 重新生成工具调用
           const retryStream = this.llmClient.stream(
@@ -353,6 +371,31 @@ ${JSON.stringify(toolCall.arguments, null, 2)}
             
             onProgress({ type: 'tool_result', data: { tool: retryToolCall.name, success: retryResult.success, message: retryResult.message } })
             continue
+          } else {
+            // 重试失败：AI 没有返回有效的工具调用
+            this.logger.warn(`[Agent] 智能重试失败，AI 未返回工具调用`)
+            this.logger.log(`[Agent] AI 重试响应内容: ${retryContent}`)
+            
+            // 给用户友好的错误提示
+            const friendlyError = `抱歉，工具参数有误，但我无法自动修复。错误信息：${result.error}`
+            onProgress({ 
+              type: 'tool_result', 
+              data: { 
+                tool: toolCall.name, 
+                success: false, 
+                message: friendlyError
+              } 
+            })
+            
+            // 推送失败结果，让 AI 生成回复告诉用户
+            toolResults[toolResults.length - 1] = {
+              tool: toolCall.name,
+              args: toolCall.arguments,
+              result: {
+                success: false,
+                error: friendlyError,
+              },
+            }
           }
         }
 
