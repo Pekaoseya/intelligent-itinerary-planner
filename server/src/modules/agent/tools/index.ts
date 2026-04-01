@@ -68,11 +68,14 @@ export async function executeTool(
     }
   }
 
+  // 使用修正后的参数
+  const normalizedArgs = validation.normalizedArgs || args
+
   // =============================================
   // Step 2: 执行工具
   // =============================================
   try {
-    const result = await executeToolInternal(toolName, args, userId, userLocation, onProgress)
+    const result = await executeToolInternal(toolName, normalizedArgs, userId, userLocation, onProgress)
     return result
   } catch (error) {
     console.error(`[ToolExecutor] 工具执行异常:`, error)
