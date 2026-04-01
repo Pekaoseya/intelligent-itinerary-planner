@@ -243,8 +243,8 @@ async function getRouteByType(
 // =============================================
 
 export async function executeTaskDelete(args: any, userId: string): Promise<ToolResult> {
-  // 参数已由 tools/index.ts 校验（必须有 task_id 或 filter）
-  const { task_id, filter } = args
+  // 扁平化参数：task_id, date, type, keyword, all, confirm
+  const { task_id, date, type, keyword, all, confirm } = args
 
   // 按ID删除单个任务
   if (task_id) {
@@ -272,63 +272,56 @@ export async function executeTaskDelete(args: any, userId: string): Promise<Tool
   }
 
   // 按条件批量删除
-  if (filter) {
-    let query = supabase.from('tasks').select('*').eq('user_id', userId)
+  let query = supabase.from('tasks').select('*').eq('user_id', userId)
 
-    if (filter.all) {
-      // 删除所有
-    } else {
-      if (filter.type) query = query.eq('type', filter.type)
-      // 统一处理 date 参数（支持字符串或数组）
-      if (filter.date) {
-        const range = parseDateParam(filter.date)
-        query = query.gte('scheduled_time', range.start).lte('scheduled_time', range.end)
-      }
-      if (filter.status) query = query.eq('status', filter.status)
-      if (filter.keyword) query = query.or(`title.ilike.%${filter.keyword}%,location_name.ilike.%${filter.keyword}%`)
-      if (filter.expired === true) query = query.eq('is_expired', true)
+  if (all) {
+    // 删除所有
+  } else {
+    if (type) query = query.eq('type', type)
+    if (date) {
+      const range = parseDateParam(date)
+      query = query.gte('scheduled_time', range.start).lte('scheduled_time', range.end)
     }
+    if (keyword) query = query.or(`title.ilike.%${keyword}%,location_name.ilike.%${keyword}%`)
+  }
 
-    const { data: tasks, error: findError } = await query
-    if (findError) return { success: false, error: findError.message }
-    if (!tasks?.length) {
-      const { data: allTasks } = await supabase
-        .from('tasks')
-        .select('id, title, type, scheduled_time, status')
-        .eq('user_id', userId)
-        .order('scheduled_time', { ascending: true })
-        .limit(10)
-      
-      return { 
-        success: true, 
-        data: { 
-          preview: true, 
-          tasks: [], 
-          count: 0,
-          suggestion: '没有找到符合条件的任务',
-          availableTasks: allTasks || [],
-          hint: allTasks && allTasks.length > 0 
-            ? `您当前有 ${allTasks.length} 个任务可以删除` 
-            : '您目前没有任何任务'
-        }, 
-        message: '没有找到符合条件的任务' 
-      }
-    }
-
+  const { data: tasks, error: findError } = await query
+  if (findError) return { success: false, error: findError.message }
+  if (!tasks?.length) {
+    const { data: allTasks } = await supabase
+      .from('tasks')
+      .select('id, title, type, scheduled_time, status')
+      .eq('user_id', userId)
+      .order('scheduled_time', { ascending: true })
+      .limit(10)
+    
     return { 
       success: true, 
       data: { 
-        preview: true,
-        deleteType: 'batch',
-        tasks: tasks,
-        count: tasks.length,
-        taskIds: tasks.map(t => t.id),
+        preview: true, 
+        tasks: [], 
+        count: 0,
+        suggestion: '没有找到符合条件的任务',
+        availableTasks: allTasks || [],
+        hint: allTasks && allTasks.length > 0 
+          ? `您当前有 ${allTasks.length} 个任务可以删除` 
+          : '您目前没有任何任务'
       }, 
-      message: `找到 ${tasks.length} 个任务待删除` 
+      message: '没有找到符合条件的任务' 
     }
   }
 
-  return { success: false, error: '参数校验未通过' }
+  return { 
+    success: true, 
+    data: { 
+      preview: true,
+      deleteType: 'batch',
+      tasks: tasks,
+      count: tasks.length,
+      taskIds: tasks.map(t => t.id),
+    }, 
+    message: `找到 ${tasks.length} 个任务待删除` 
+  }
 }
 
 // =============================================
@@ -336,8 +329,19 @@ export async function executeTaskDelete(args: any, userId: string): Promise<Tool
 // =============================================
 
 export async function executeTaskUpdate(args: any, userId: string): Promise<ToolResult> {
-  // 参数已由 tools/index.ts 校验
-  const { task_id, filter, updates } = args
+  // 扁平化参数：task_id, keyword, title, scheduled_time, location_name, status
+  const { task_id, keyword, title, scheduled_time, location_name, status } = args
+
+  // 构建更新对象
+  const updates: any = {}
+  if (title !== undefined) updates.title = title
+  if (scheduled_time !== undefined) updates.scheduled_time = scheduled_time
+  if (location_name !== undefined) updates.location_name = location_name
+  if (status !== undefined) updates.status = status
+
+  if (Object.keys(updates).length === 0) {
+    return { success: false, error: '没有提供要更新的字段' }
+  }
 
   let targetTask: any = null
 
@@ -345,8 +349,8 @@ export async function executeTaskUpdate(args: any, userId: string): Promise<Tool
     const { data, error } = await supabase.from('tasks').select('*').eq('id', task_id).eq('user_id', userId).single()
     if (error || !data) return { success: false, error: '未找到该任务' }
     targetTask = data
-  } else if (filter?.keyword) {
-    const { data, error } = await supabase.from('tasks').select('*').eq('user_id', userId).or(`title.ilike.%${filter.keyword}%,location_name.ilike.%${filter.keyword}%`).limit(1).single()
+  } else if (keyword) {
+    const { data, error } = await supabase.from('tasks').select('*').eq('user_id', userId).or(`title.ilike.%${keyword}%,location_name.ilike.%${keyword}%`).limit(1).single()
     if (error || !data) {
       const { data: allTasks } = await supabase
         .from('tasks')
@@ -358,7 +362,7 @@ export async function executeTaskUpdate(args: any, userId: string): Promise<Tool
       
       return { 
         success: false, 
-        error: `未找到包含「${filter.keyword}」的任务`,
+        error: `未找到包含「${keyword}」的任务`,
         data: {
           suggestion: '您可以先查看当前的任务列表',
           availableTasks: allTasks || [],
@@ -395,21 +399,19 @@ export async function executeTaskUpdate(args: any, userId: string): Promise<Tool
 // =============================================
 
 export async function executeTaskQuery(args: any, userId: string): Promise<ToolResult> {
-  const { filter, limit = 20 } = args
+  // 扁平化参数：date, type, keyword, status, include_expired, limit
+  const { date, type, keyword, status, include_expired, limit = 20 } = args
 
   let query = supabase.from('tasks').select('*').eq('user_id', userId)
 
-  if (filter) {
-    // 统一处理 date 参数（支持字符串或数组）
-    if (filter.date) {
-      const range = parseDateParam(filter.date)
-      query = query.gte('scheduled_time', range.start).lte('scheduled_time', range.end)
-    }
-    if (filter.type) query = query.eq('type', filter.type)
-    if (filter.status) query = query.eq('status', filter.status)
-    if (filter.keyword) query = query.or(`title.ilike.%${filter.keyword}%,location_name.ilike.%${filter.keyword}%`)
-    if (!filter.include_expired) query = query.eq('is_expired', false)
+  if (date) {
+    const range = parseDateParam(date)
+    query = query.gte('scheduled_time', range.start).lte('scheduled_time', range.end)
   }
+  if (type) query = query.eq('type', type)
+  if (status) query = query.eq('status', status)
+  if (keyword) query = query.or(`title.ilike.%${keyword}%,location_name.ilike.%${keyword}%`)
+  if (!include_expired) query = query.eq('is_expired', false)
 
   query = query.order('scheduled_time', { ascending: true }).limit(limit)
 
@@ -424,8 +426,8 @@ export async function executeTaskQuery(args: any, userId: string): Promise<ToolR
 // =============================================
 
 export async function executeTaskComplete(args: any, userId: string): Promise<ToolResult> {
-  // 参数已由 tools/index.ts 校验
-  const { task_id, filter } = args
+  // 扁平化参数：task_id, keyword
+  const { task_id, keyword } = args
 
   let targetTask: any = null
 
@@ -433,8 +435,8 @@ export async function executeTaskComplete(args: any, userId: string): Promise<To
     const { data, error } = await supabase.from('tasks').select('*').eq('id', task_id).eq('user_id', userId).single()
     if (error || !data) return { success: false, error: '未找到该任务' }
     targetTask = data
-  } else if (filter?.keyword) {
-    const { data, error } = await supabase.from('tasks').select('*').eq('user_id', userId).or(`title.ilike.%${filter.keyword}%`).limit(1).single()
+  } else if (keyword) {
+    const { data, error } = await supabase.from('tasks').select('*').eq('user_id', userId).or(`title.ilike.%${keyword}%`).limit(1).single()
     if (error || !data) return { success: false, error: '未找到匹配的任务' }
     targetTask = data
   }

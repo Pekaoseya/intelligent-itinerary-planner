@@ -3,8 +3,8 @@
  * 这些工具可以被 LLM 调用来执行实际操作
  * 
  * 设计理念：
+ * - 参数扁平化，避免嵌套结构，降低 AI 理解成本
  * - 所有工具元数据集中定义（参数、示例、校验）
- * - 新增工具只需在此文件添加定义，无需修改其他代码
  * - 参数校验不可信任 AI 输入，必须严格校验
  */
 
@@ -79,10 +79,7 @@ export const TOOLS: Record<string, ToolDefinition> = {
         scheduled_time: { type: 'string', description: '计划时间（ISO格式）', required: true },
         end_time: { type: 'string', description: '结束时间（可选）' },
         location_name: { type: 'string', description: '地点名称' },
-        location_address: { type: 'string', description: '地点地址' },
         destination_name: { type: 'string', description: '目的地名称（出行类）' },
-        destination_address: { type: 'string', description: '目的地地址' },
-        metadata: { type: 'object', description: '类型特定数据' },
       },
       required: ['title', 'type', 'scheduled_time'],
     },
@@ -91,107 +88,79 @@ export const TOOLS: Record<string, ToolDefinition> = {
       { title: '团队周会', type: 'meeting', scheduled_time: '2025-01-15T10:00:00+08:00', location_name: '3号会议室' },
     ],
     customValidate: (args) => {
-      // 校验 title
       if (args.title !== undefined) {
         const error = validateTitle(args.title)
         if (error) return error
       }
-      
-      // 校验 type
       if (args.type !== undefined) {
         const error = validateTaskType(args.type)
         if (error) return error
       }
-      
-      // 校验 scheduled_time
       if (args.scheduled_time !== undefined) {
         const error = validateScheduledTime(args.scheduled_time)
         if (error) return error
       }
-      
-      // 校验 end_time（如果提供）
       if (args.end_time !== undefined && args.end_time !== null) {
         const error = validateScheduledTime(args.end_time, 'end_time')
         if (error) return error
       }
-      
       return null
     },
   },
 
   task_delete: {
     name: 'task_delete',
-    description: '删除任务。可以按ID删除、按条件批量删除（如删除所有、删除今天的、删除某类型的）。',
+    description: '删除任务。可按ID删除、按日期/类型/关键词批量删除、或删除所有任务。',
     parameters: {
       type: 'object',
       properties: {
-        task_id: { type: 'string', description: '要删除的任务ID（单个任务）' },
-        filter: { 
-          type: 'object',
-          properties: {
-            type: { 
-              type: 'string', 
-              enum: [...VALID_TASK_TYPES],
-              description: '按类型筛选' 
-            },
-            date: { 
-              type: 'string', 
-              description: '日期筛选。单个日期如 "2025-01-15"；日期范围如 ["2025-01-15", "2025-01-16"]' 
-            },
-            status: { 
-              type: 'string',
-              enum: [...VALID_TASK_STATUSES],
-              description: '按状态筛选' 
-            },
-            keyword: { type: 'string', description: '按关键词筛选' },
-            expired: { type: 'boolean', description: '只删除过期的' },
-            all: { type: 'boolean', description: '删除所有任务（用户说"删除所有"时设为 true）' },
-          },
-          description: '筛选条件（不传task_id时使用）'
+        task_id: { type: 'string', description: '任务ID（按ID删除单个任务）' },
+        date: { 
+          type: 'string', 
+          description: '日期筛选。单日如 "2025-01-15"；范围如 ["2025-01-15", "2025-01-16"]' 
         },
+        type: { 
+          type: 'string', 
+          enum: [...VALID_TASK_TYPES],
+          description: '按类型筛选（taxi/train/flight/meeting/dining/hotel/todo/other）' 
+        },
+        keyword: { type: 'string', description: '按关键词筛选任务标题' },
+        all: { type: 'boolean', description: '删除所有任务' },
         confirm: { type: 'boolean', description: '是否已确认删除' },
       },
       required: [],
     },
     examples: [
-      { task_id: 'abc123' },
-      { filter: { all: true } },
-      { filter: { date: '2025-01-15' } },
-      { filter: { date: ['2025-01-15', '2025-01-16'] } },
-      { filter: { type: 'taxi' } },
+      { task_id: '550e8400-e29b-41d4-a716-446655440000' },
+      { date: '2025-01-15' },
+      { date: ['2025-01-15', '2025-01-16'] },
+      { type: 'taxi' },
+      { keyword: '晚餐' },
+      { all: true },
     ],
     customValidate: (args) => {
-      if (!args.task_id && !args.filter) {
-        return '必须提供 task_id 或 filter 参数'
+      // 必须提供至少一个筛选条件
+      if (!args.task_id && !args.date && !args.type && !args.keyword && !args.all) {
+        return '请提供删除条件：task_id、date、type、keyword 或 all'
       }
       
-      // 校验 task_id
       if (args.task_id) {
         const error = validateTaskId(args.task_id)
         if (error) return error
       }
       
-      // 校验 filter.type
-      if (args.filter?.type) {
-        const error = validateTaskType(args.filter.type, 'filter.type')
+      if (args.type) {
+        const error = validateTaskType(args.type)
         if (error) return error
       }
       
-      // 校验 filter.date
-      if (args.filter?.date !== undefined) {
-        const result = isValidDateParam(args.filter.date)
+      if (args.date !== undefined) {
+        const result = isValidDateParam(args.date)
         if (!result.valid) return result.error!
       }
       
-      // 校验 filter.status
-      if (args.filter?.status) {
-        const error = validateTaskStatus(args.filter.status, 'filter.status')
-        if (error) return error
-      }
-      
-      // 校验 filter.keyword
-      if (args.filter?.keyword !== undefined) {
-        const error = validateKeyword(args.filter.keyword)
+      if (args.keyword !== undefined) {
+        const error = validateKeyword(args.keyword)
         if (error) return error
       }
       
@@ -201,91 +170,63 @@ export const TOOLS: Record<string, ToolDefinition> = {
 
   task_update: {
     name: 'task_update',
-    description: '更新任务信息。可以修改时间、地点、状态等。',
+    description: '更新任务信息。可修改时间、地点、状态等。',
     parameters: {
       type: 'object',
       properties: {
         task_id: { type: 'string', description: '要更新的任务ID' },
-        filter: {
-          type: 'object',
-          properties: {
-            keyword: { type: 'string', description: '按关键词匹配任务' },
-          },
-          description: '用于匹配任务的筛选条件'
-        },
-        updates: {
-          type: 'object',
-          properties: {
-            title: { type: 'string', description: '新标题' },
-            scheduled_time: { type: 'string', description: '新时间' },
-            location_name: { type: 'string', description: '新地点' },
-            status: { 
-              type: 'string', 
-              enum: [...VALID_TASK_STATUSES], 
-              description: '新状态' 
-            },
-            metadata: { type: 'object', description: '新元数据' },
-          },
-          description: '要更新的字段',
-          required: true
+        keyword: { type: 'string', description: '按关键词匹配任务（不知道ID时使用）' },
+        title: { type: 'string', description: '新标题' },
+        scheduled_time: { type: 'string', description: '新时间' },
+        location_name: { type: 'string', description: '新地点' },
+        status: { 
+          type: 'string', 
+          enum: [...VALID_TASK_STATUSES], 
+          description: '新状态（pending/confirmed/in_progress/completed/cancelled）' 
         },
       },
-      required: ['updates'],
+      required: [],
     },
     examples: [
-      { task_id: 'abc123', updates: { status: 'completed' } },
-      { filter: { keyword: '晚餐' }, updates: { scheduled_time: '2025-01-15T19:00:00+08:00' } },
+      { task_id: '550e8400-e29b-41d4-a716-446655440000', status: 'completed' },
+      { keyword: '晚餐', scheduled_time: '2025-01-15T19:00:00+08:00' },
+      { keyword: '会议', location_name: '5号会议室' },
     ],
     customValidate: (args) => {
-      if (!args.task_id && !args.filter?.keyword) {
-        return '必须提供 task_id 或 filter.keyword'
+      // 必须提供定位条件
+      if (!args.task_id && !args.keyword) {
+        return '请提供 task_id 或 keyword 来定位要更新的任务'
       }
       
-      // 校验 task_id
+      // 必须提供至少一个更新字段
+      const updateFields = ['title', 'scheduled_time', 'location_name', 'status']
+      const hasUpdate = updateFields.some(f => args[f] !== undefined)
+      if (!hasUpdate) {
+        return '请提供要更新的字段：title、scheduled_time、location_name 或 status'
+      }
+      
       if (args.task_id) {
         const error = validateTaskId(args.task_id)
         if (error) return error
       }
       
-      // 校验 filter.keyword
-      if (args.filter?.keyword !== undefined) {
-        const error = validateKeyword(args.filter.keyword)
+      if (args.keyword !== undefined) {
+        const error = validateKeyword(args.keyword)
         if (error) return error
       }
       
-      // 校验 updates
-      if (!args.updates || Object.keys(args.updates).length === 0) {
-        return 'updates 不能为空'
-      }
-      
-      // 检测 updates 中是否有错误的参数名
-      const validUpdateFields = ['title', 'scheduled_time', 'location_name', 'status', 'metadata', 'description', 'type', 'destination_name']
-      const wrongParams = Object.keys(args.updates).filter(key => !validUpdateFields.includes(key))
-      if (wrongParams.length > 0) {
-        return `updates 中包含未知参数: ${wrongParams.join(', ')}。正确参数: ${validUpdateFields.join(', ')}`
-      }
-      
-      // 校验 updates.title
-      if (args.updates.title !== undefined) {
-        const error = validateTitle(args.updates.title)
+      if (args.title !== undefined) {
+        const error = validateTitle(args.title)
         if (error) return error
       }
       
-      // 校验 updates.scheduled_time
-      if (args.updates.scheduled_time !== undefined) {
-        const error = validateScheduledTime(args.updates.scheduled_time)
+      if (args.scheduled_time !== undefined) {
+        const error = validateScheduledTime(args.scheduled_time)
         if (error) return error
       }
       
-      // 校验 updates.status
-      if (args.updates.status !== undefined) {
-        const error = validateTaskStatus(args.updates.status, 'updates.status')
-        if (error) return error
-      }
-      
-      // 校验 updates.type
-      if (args.updates.type !== undefined) {
-        const error = validateTaskType(args.updates.type, 'updates.type')
+      if (args.status !== undefined) {
+        const error = validateTaskStatus(args.status, 'status')
         if (error) return error
       }
       
@@ -295,67 +236,58 @@ export const TOOLS: Record<string, ToolDefinition> = {
 
   task_query: {
     name: 'task_query',
-    description: '查询任务。可以按日期、类型、状态等条件查询。',
+    description: '查询任务。可按日期、类型、关键词等条件查询。',
     parameters: {
       type: 'object',
       properties: {
-        filter: {
-          type: 'object',
-          properties: {
-            date: { 
-              type: 'string', 
-              description: '日期筛选。单个日期如 "2025-01-15"；日期范围如 ["2025-01-15", "2025-01-16"]' 
-            },
-            type: { 
-              type: 'string', 
-              enum: [...VALID_TASK_TYPES],
-              description: '按类型筛选' 
-            },
-            status: { 
-              type: 'string',
-              enum: [...VALID_TASK_STATUSES],
-              description: '按状态筛选' 
-            },
-            keyword: { type: 'string', description: '按关键词筛选' },
-            include_expired: { type: 'boolean', description: '是否包含过期任务' },
-          },
-          description: '筛选条件'
+        date: { 
+          type: 'string', 
+          description: '日期筛选。单日如 "2025-01-15"；范围如 ["2025-01-15", "2025-01-16"]' 
         },
-        limit: { type: 'number', description: '返回数量限制' },
+        type: { 
+          type: 'string', 
+          enum: [...VALID_TASK_TYPES],
+          description: '按类型筛选（taxi/train/flight/meeting/dining/hotel/todo/other）' 
+        },
+        keyword: { type: 'string', description: '按关键词筛选任务标题' },
+        status: { 
+          type: 'string',
+          enum: [...VALID_TASK_STATUSES],
+          description: '按状态筛选' 
+        },
+        include_expired: { type: 'boolean', description: '是否包含过期任务' },
+        limit: { type: 'number', description: '返回数量限制（默认20，最大100）' },
       },
       required: [],
     },
     examples: [
-      { filter: { date: '2025-01-15' } },
-      { filter: { date: ['2025-01-15', '2025-01-16'] } },
-      { filter: { type: 'taxi', include_expired: true } },
+      { date: '2025-01-15' },
+      { date: ['2025-01-15', '2025-01-16'] },
+      { type: 'taxi' },
+      { keyword: '会议' },
+      { status: 'pending' },
     ],
     customValidate: (args) => {
-      // 校验 filter.type
-      if (args.filter?.type) {
-        const error = validateTaskType(args.filter.type, 'filter.type')
+      if (args.type) {
+        const error = validateTaskType(args.type)
         if (error) return error
       }
       
-      // 校验 filter.date
-      if (args.filter?.date !== undefined) {
-        const result = isValidDateParam(args.filter.date)
+      if (args.date !== undefined) {
+        const result = isValidDateParam(args.date)
         if (!result.valid) return result.error!
       }
       
-      // 校验 filter.status
-      if (args.filter?.status) {
-        const error = validateTaskStatus(args.filter.status, 'filter.status')
+      if (args.status) {
+        const error = validateTaskStatus(args.status, 'status')
         if (error) return error
       }
       
-      // 校验 filter.keyword
-      if (args.filter?.keyword !== undefined) {
-        const error = validateKeyword(args.filter.keyword)
+      if (args.keyword !== undefined) {
+        const error = validateKeyword(args.keyword)
         if (error) return error
       }
       
-      // 校验 limit
       if (args.limit !== undefined) {
         const error = validateLimit(args.limit)
         if (error) return error
@@ -372,34 +304,26 @@ export const TOOLS: Record<string, ToolDefinition> = {
       type: 'object',
       properties: {
         task_id: { type: 'string', description: '任务ID' },
-        filter: {
-          type: 'object',
-          properties: {
-            keyword: { type: 'string', description: '按关键词匹配' },
-          },
-          description: '筛选条件'
-        },
+        keyword: { type: 'string', description: '按关键词匹配任务' },
       },
       required: [],
     },
     examples: [
-      { task_id: 'abc123' },
-      { filter: { keyword: '晚餐' } },
+      { task_id: '550e8400-e29b-41d4-a716-446655440000' },
+      { keyword: '晚餐' },
     ],
     customValidate: (args) => {
-      if (!args.task_id && !args.filter?.keyword) {
-        return '必须提供 task_id 或 filter.keyword'
+      if (!args.task_id && !args.keyword) {
+        return '请提供 task_id 或 keyword'
       }
       
-      // 校验 task_id
       if (args.task_id) {
         const error = validateTaskId(args.task_id)
         if (error) return error
       }
       
-      // 校验 filter.keyword
-      if (args.filter?.keyword !== undefined) {
-        const error = validateKeyword(args.filter.keyword)
+      if (args.keyword !== undefined) {
+        const error = validateKeyword(args.keyword)
         if (error) return error
       }
       
@@ -413,7 +337,7 @@ export const TOOLS: Record<string, ToolDefinition> = {
   
   taxi_call: {
     name: 'taxi_call',
-    description: '呼叫出租车/网约车。创建打车任务并模拟叫车过程。',
+    description: '呼叫出租车/网约车。创建打车任务。',
     parameters: {
       type: 'object',
       properties: {
@@ -428,22 +352,16 @@ export const TOOLS: Record<string, ToolDefinition> = {
       { origin: '北京国贸', destination: '首都机场', scheduled_time: '2025-01-15T08:00:00+08:00' },
     ],
     customValidate: (args) => {
-      // 校验 origin
       if (!args.origin || args.origin.trim().length === 0) {
-        return 'origin（出发地）不能为空'
+        return '出发地不能为空'
       }
-      
-      // 校验 destination
       if (!args.destination || args.destination.trim().length === 0) {
-        return 'destination（目的地）不能为空'
+        return '目的地不能为空'
       }
-      
-      // 校验 scheduled_time（如果提供）
       if (args.scheduled_time !== undefined) {
         const error = validateScheduledTime(args.scheduled_time)
         if (error) return error
       }
-      
       return null
     },
   },
@@ -459,7 +377,7 @@ export const TOOLS: Record<string, ToolDefinition> = {
       required: ['task_id'],
     },
     examples: [
-      { task_id: 'taxi_123' },
+      { task_id: '550e8400-e29b-41d4-a716-446655440000' },
     ],
     customValidate: (args) => {
       if (!args.task_id) {
@@ -491,23 +409,20 @@ export const TOOLS: Record<string, ToolDefinition> = {
       { scheduled_time: '2025-01-15T14:00:00+08:00', duration_minutes: 60 },
     ],
     customValidate: (args) => {
-      // 校验 scheduled_time
       if (!args.scheduled_time) {
         return 'scheduled_time 不能为空'
       }
       const error = validateScheduledTime(args.scheduled_time)
       if (error) return error
       
-      // 校验 duration_minutes（如果提供）
       if (args.duration_minutes !== undefined) {
         if (!Number.isInteger(args.duration_minutes) || args.duration_minutes <= 0) {
           return `duration_minutes 必须是正整数，当前值: ${args.duration_minutes}`
         }
-        if (args.duration_minutes > 1440) { // 24小时
+        if (args.duration_minutes > 1440) {
           return 'duration_minutes 不能超过 1440（24小时）'
         }
       }
-      
       return null
     },
   },
@@ -519,46 +434,38 @@ export const TOOLS: Record<string, ToolDefinition> = {
       type: 'object',
       properties: {
         date: { type: 'string', description: '日期（YYYY-MM-DD）' },
-        time_range: { 
-          type: 'object', 
-          properties: { 
-            start: { type: 'string', description: '开始时间' }, 
-            end: { type: 'string', description: '结束时间' } 
-          },
-          description: '时间范围'
-        },
+        start_time: { type: 'string', description: '开始时间' },
+        end_time: { type: 'string', description: '结束时间' },
       },
       required: [],
     },
     examples: [
       { date: '2025-01-15' },
-      { time_range: { start: '2025-01-15T09:00:00+08:00', end: '2025-01-15T18:00:00+08:00' } },
+      { start_time: '2025-01-15T09:00:00+08:00', end_time: '2025-01-15T18:00:00+08:00' },
     ],
     customValidate: (args) => {
-      // 至少需要一个参数
-      if (!args.date && !args.time_range) {
-        return '必须提供 date 或 time_range 参数'
+      if (!args.date && !args.start_time && !args.end_time) {
+        return '请提供 date 或 start_time/end_time'
       }
       
-      // 校验 date
       if (args.date !== undefined) {
         const result = isValidDateParam(args.date)
         if (!result.valid) return result.error!
       }
       
-      // 校验 time_range
-      if (args.time_range) {
-        if (!args.time_range.start || !args.time_range.end) {
-          return 'time_range 必须同时包含 start 和 end'
-        }
-        const startError = validateScheduledTime(args.time_range.start, 'time_range.start')
-        if (startError) return startError
-        const endError = validateScheduledTime(args.time_range.end, 'time_range.end')
-        if (endError) return endError
-        
-        // 检查开始时间是否小于结束时间
-        if (new Date(args.time_range.start) >= new Date(args.time_range.end)) {
-          return 'time_range.start 必须早于 time_range.end'
+      if (args.start_time) {
+        const error = validateScheduledTime(args.start_time, 'start_time')
+        if (error) return error
+      }
+      
+      if (args.end_time) {
+        const error = validateScheduledTime(args.end_time, 'end_time')
+        if (error) return error
+      }
+      
+      if (args.start_time && args.end_time) {
+        if (new Date(args.start_time) >= new Date(args.end_time)) {
+          return 'start_time 必须早于 end_time'
         }
       }
       
@@ -572,24 +479,22 @@ export const TOOLS: Record<string, ToolDefinition> = {
   
   trip_plan: {
     name: 'trip_plan',
-    description: '智能行程规划。根据起点和终点自动规划最佳路线，拆分为多个任务（如：打车去机场 → 飞往目的地 → 打车到酒店）。支持打车、高铁、飞机等多种交通方式。',
+    description: '智能行程规划。自动规划最佳路线，拆分为多个任务。支持打车、高铁、飞机等交通方式。',
     parameters: {
       type: 'object',
       properties: {
-        origin: { type: 'string', description: '出发地（可选，默认使用当前位置）' },
         destination: { 
           type: 'string', 
-          description: '目的地（必填！用户说的"去某地"、"到某地"、"某地行程"中的"某地"就是目的地）',
+          description: '目的地',
           required: true
         },
-        departure_time: { type: 'string', description: '出发时间（用户说的"明天"、"下周"等时间）' },
-        arrival_time: { type: 'string', description: '期望到达时间（可选）' },
+        origin: { type: 'string', description: '出发地（默认使用当前位置）' },
+        departure_time: { type: 'string', description: '出发时间' },
         preferred_mode: { 
           type: 'string', 
           enum: [...VALID_TRANSPORT_MODES],
-          description: '优先交通方式（可选）' 
+          description: '优先交通方式（taxi/train/flight）' 
         },
-        notes: { type: 'string', description: '备注信息（可选）' },
       },
       required: ['destination'],
     },
@@ -599,20 +504,17 @@ export const TOOLS: Record<string, ToolDefinition> = {
       { origin: '杭州', destination: '上海', preferred_mode: 'train' },
     ],
     customValidate: (args) => {
-      // 校验 destination
       if (!args.destination || args.destination.trim().length === 0) {
-        return 'destination（目的地）不能为空'
+        return '目的地不能为空'
       }
       
-      // 校验 origin（如果提供）
       if (args.origin !== undefined && args.origin.trim().length === 0) {
-        return 'origin（出发地）不能为空字符串'
+        return '出发地不能为空字符串'
       }
       
-      // 校验 preferred_mode
       if (args.preferred_mode !== undefined) {
         if (!isValidTransportMode(args.preferred_mode)) {
-          return `preferred_mode 值错误："${args.preferred_mode}" 不是有效的交通方式。有效值: ${VALID_TRANSPORT_MODES.join(', ')}`
+          return `preferred_mode 值错误。有效值: ${VALID_TRANSPORT_MODES.join(', ')}`
         }
       }
       
