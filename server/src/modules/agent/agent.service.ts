@@ -596,27 +596,25 @@ ${locationInfo}
 
 ${TOOL_NAMES.map(t => `- ${t.name}: ${t.description}`).join('\n')}
 
-## 常用参数提示（重要！）
-
-调用工具时请使用以下参数名，不要用其他名称：
+## 常用参数
 
 ### trip_plan（行程规划）
-- **origin**: 出发地（不要用 start_point、from、start）
-- **destination**: 目的地（不要用 end_point、to、end）
-- **departure_time**: 出发时间（不要用 time、start_time）
+- origin: 出发地
+- destination: 目的地
+- departure_time: 出发时间
 
-### task_create / task_update（创建/修改任务）
-- **scheduled_time**: 任务时间（不要用 time、date）
-- **location_name**: 地点名称（不要用 location、place）
-- **destination_name**: 目的地名称（不要用 destination、to）
+### task_create / task_update（任务）
+- scheduled_time: 任务时间
+- location_name: 地点
+- destination_name: 目的地
 
-### task_delete / task_update（删除/修改任务）
-- **task_id**: 任务 ID（必须是 UUID 格式，如 "abc123-def456-..."，不要传描述性文本）
-- 如果不知道 task_id，请用 filter.keyword 按关键词查找
+### task_delete / task_update
+- task_id: 任务ID（UUID格式）
+- filter: 筛选条件（包含 keyword、date、type 等）
 
-### task_query（查询任务）
-- **date**: 日期（格式：YYYY-MM-DD，如 "2025-01-15"）
-- **filter**: 筛选条件对象（包含 date、type、status、keyword 等）
+### task_query
+- date: 日期（YYYY-MM-DD）
+- filter: 筛选条件对象
 
 ## 响应格式
 
