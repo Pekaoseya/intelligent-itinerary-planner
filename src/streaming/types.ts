@@ -47,14 +47,17 @@ export interface ReasoningData {
  * 用于显示子智能体（如行程规划 Agent）的实时思考过程
  */
 export interface SubAgentProgressData {
-  /** 调用该子 Agent 的工具名称 */
-  tool: string
-  /** 进度类型：reasoning(思考中)、tool_call(调用API)、result(返回结果) */
-  type: 'reasoning' | 'tool_call' | 'result'
-  /** 进度描述（带表情符号） */
-  step: string
+  /** Agent 标识 */
+  agent: string
+  /** 进度阶段 */
+  phase: 'thinking' | 'querying' | 'processing' | 'result' | 'error'
+  /** 进度消息（已格式化，带表情符号） */
+  message: string
+  /** 消息键（可选） */
+  messageKey?: string
   /** 附加数据 */
   data?: unknown
+  /** 时间戳 */
   timestamp?: number
 }
 

@@ -63,7 +63,7 @@ export abstract class BaseAdapter implements StreamClient {
         callbacks.onReasoning?.(data as ReasoningData)
         break
       case 'sub_agent_progress':
-        console.log('[BaseAdapter] 调用 onSubAgentProgress, step:', (data as SubAgentProgressData).step)
+        console.log('[BaseAdapter] 调用 onSubAgentProgress, message:', (data as SubAgentProgressData).message)
         callbacks.onSubAgentProgress?.(data as SubAgentProgressData)
         break
       case 'tool_result':

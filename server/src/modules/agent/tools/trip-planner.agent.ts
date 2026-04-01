@@ -20,6 +20,12 @@ import {
   extractCityName,
 } from './map-utils'
 import type { TripPlanRequest, TripPlanResult, RoutePlan, RouteSegment, SplitTask } from './trip-planner.types'
+import { 
+  createProgressEmitter, 
+  ProgressEmitter, 
+  type ProgressCallback,
+  type AgentProgressEvent 
+} from '../progress'
 
 // =============================================
 // LLM 响应类型
@@ -63,18 +69,6 @@ interface TaskSplitOutput {
 }
 
 // =============================================
-// 进度回调类型
-// =============================================
-
-export interface TripProgressEvent {
-  type: 'reasoning' | 'tool_call' | 'result'
-  step: string
-  data?: any
-}
-
-export type TripProgressCallback = (event: TripProgressEvent) => void
-
-// =============================================
 // 智能体实现
 // =============================================
 
@@ -94,29 +88,26 @@ export class TripPlannerAgent {
    */
   async planTrip(
     request: TripPlanRequest,
-    onProgress?: TripProgressCallback
+    onProgress?: ProgressCallback
   ): Promise<TripPlanResult> {
     const reasoning: string[] = []
-
-    // 辅助函数：推送进度
-    const pushProgress = (step: string, type: TripProgressEvent['type'] = 'reasoning', data?: any) => {
-      reasoning.push(step)
-      onProgress?.({ type, step, data })
-    }
+    
+    // 创建进度发射器
+    const progress = createProgressEmitter('trip_planner', onProgress)
 
     try {
       // =============================================
       // Step 1: LLM 分析用户需求
       // =============================================
-      pushProgress('🧠 AI 正在分析您的出行需求...')
+      progress.emit('analyzing_request')
       
       const analysis = await this.analyzeRequest(request)
-      pushProgress(analysis.reasoning)
+      reasoning.push(analysis.reasoning)
 
       // =============================================
       // Step 2: 获取坐标和城市信息
       // =============================================
-      pushProgress('📍 正在获取地理信息...')
+      progress.emit('getting_location')
       
       const originCoord = request.origin.coordinate || await getCoordinates(request.origin.name)
       const destCoord = request.destination.coordinate || await getCoordinates(request.destination.name)
@@ -129,7 +120,8 @@ export class TripPlannerAgent {
         destCoord.latitude, destCoord.longitude
       )
       
-      pushProgress(`📏 直线距离约 ${Math.round(straightDistance / 1000)} 公里`)
+      progress.emit('calculating_distance', { distance: Math.round(straightDistance / 1000) })
+      reasoning.push(`直线距离约 ${Math.round(straightDistance / 1000)} 公里`)
 
       // =============================================
       // Step 3: 调用高德 API
@@ -138,7 +130,7 @@ export class TripPlannerAgent {
 
       // 跨城交通
       if (originCity && destCity && originCity !== destCity) {
-        pushProgress(`🚄 查询跨城交通：${originCity} → ${destCity}`, 'tool_call')
+        progress.emit('querying_transit', { from: originCity, to: destCity })
         
         const originStr = `${originCoord.longitude},${originCoord.latitude}`
         const destStr = `${destCoord.longitude},${destCoord.latitude}`
@@ -146,24 +138,25 @@ export class TripPlannerAgent {
         const transitPlans = await queryLongDistanceTransit(originStr, destStr, originCity, destCity)
         
         if (transitPlans.length > 0) {
-          pushProgress(`✅ 找到 ${transitPlans.length} 个出行方案`, 'result', { count: transitPlans.length })
+          progress.emit('found_routes', { count: transitPlans.length })
+          reasoning.push(`高德返回 ${transitPlans.length} 个方案`)
           
           for (const plan of transitPlans.slice(0, 2)) {
             const route = this.convertPlanToRoute(plan)
             if (route) routes.push(route)
           }
         } else {
-          pushProgress('⚠️ 未找到跨城交通方案')
+          progress.emit('no_routes')
         }
       }
 
       // 短距离驾车
       if (straightDistance < 500000 && routes.length === 0) {
-        pushProgress('🚗 查询驾车路线...', 'tool_call')
+        progress.emit('querying_driving')
         const drivingRoute = await getDrivingRoute(originCoord, destCoord)
         
         if (drivingRoute) {
-          pushProgress('✅ 找到驾车方案', 'result')
+          progress.emit('found_routes', { count: 1 })
           routes.push({
             id: 'taxi_direct',
             name: '打车直达',
@@ -199,7 +192,7 @@ export class TripPlannerAgent {
         }
       }
 
-      pushProgress('📋 AI 正在拆分行程任务...')
+      progress.emit('splitting_tasks')
       
       const selectedRoute = routes[0]
       const taskSplit = await this.splitTasksWithLLM(
@@ -208,8 +201,10 @@ export class TripPlannerAgent {
         request
       )
       
-      pushProgress(`✅ 已拆分为 ${taskSplit.tasks.length} 个任务`, 'result', { count: taskSplit.tasks.length })
-      pushProgress(taskSplit.summary)
+      progress.emit('tasks_created', { count: taskSplit.tasks.length })
+      progress.emit('completed', { summary: taskSplit.summary })
+      reasoning.push(`已拆分为 ${taskSplit.tasks.length} 个任务`)
+      reasoning.push(taskSplit.summary)
 
       // 转换为 SplitTask 格式
       const splitTasks: SplitTask[] = taskSplit.tasks.map((task, index) => ({
@@ -232,7 +227,7 @@ export class TripPlannerAgent {
       }
     } catch (error) {
       this.logger.error('行程规划失败:', error)
-      pushProgress(`❌ 行程规划失败: ${error.message}`)
+      progress.emit('error', { error: error.message })
       return {
         success: false,
         routes: [],
@@ -422,7 +417,7 @@ export function getTripPlannerAgent(): TripPlannerAgent {
  */
 export async function planTripWithAgent(
   request: TripPlanRequest,
-  onProgress?: TripProgressCallback
+  onProgress?: ProgressCallback
 ): Promise<TripPlanResult> {
   return getTripPlannerAgent().planTrip(request, onProgress)
 }

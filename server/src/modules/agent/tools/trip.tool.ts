@@ -9,7 +9,8 @@
 
 import { Injectable } from '@nestjs/common'
 import { ToolResult } from './definitions'
-import { planTripWithAgent, TripProgressCallback } from './trip-planner.agent'
+import { planTripWithAgent } from './trip-planner.agent'
+import { type ProgressCallback } from '../progress'
 import type { UserLocation } from './types'
 
 // =============================================
@@ -131,7 +132,7 @@ export async function executeTripPlan(
   args: Record<string, any>,
   userId: string,
   userLocation?: UserLocation,
-  onProgress?: TripProgressCallback
+  onProgress?: ProgressCallback
 ): Promise<ToolResult> {
   try {
     // 提取参数

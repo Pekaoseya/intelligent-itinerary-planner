@@ -9,6 +9,7 @@ import { getSupabaseClient } from '../../storage/database/supabase-client'
 import { TOOLS, TOOL_NAMES, ToolResult } from './tools/definitions'
 import { executeTool, resetMultiSegmentState } from './tools'
 import { UserContextService } from '../user-context/user-context.service'
+import { type ProgressCallback, type AgentProgressEvent } from './progress'
 
 // 用户位置信息
 interface UserLocation {
@@ -267,8 +268,18 @@ export class AgentService {
         onProgress({ type: 'reasoning', data: { step: `正在${this.getToolDisplayName(toolCall.name)}...` } })
         
         // 创建子 Agent 进度回调，将进度推送给前端
-        const toolProgressCallback = (event: { type: string; step: string; data?: any }) => {
-          onProgress({ type: 'sub_agent_progress', data: { tool: toolCall.name, ...event } })
+        const toolProgressCallback: ProgressCallback = (event: AgentProgressEvent) => {
+          onProgress({ 
+            type: 'sub_agent_progress', 
+            data: {
+              agent: event.agent,
+              phase: event.phase,
+              message: event.message,
+              messageKey: event.messageKey,
+              data: event.data,
+              timestamp: event.timestamp,
+            }
+          })
         }
         
         const result = await executeTool(toolCall.name, toolCall.arguments, userId, userLocation, toolProgressCallback)

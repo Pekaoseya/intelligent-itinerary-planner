@@ -112,8 +112,9 @@ export function useAI(options: UseAIOptions): UseAIResult {
           const msg = currentMessages.find(m => m.id === aiMessageId)
           if (!msg) return
           
-          // 将子 Agent 进度也添加到 reasoning 中显示
-          const progressText = data.step
+          // 将子 Agent 进度添加到 reasoning 中显示
+          // 新格式: { agent, phase, message, messageKey?, data?, timestamp? }
+          const progressText = data.message
           const newReasoning = [...(msg.reasoning || [])]
           if (progressText && !newReasoning.includes(progressText)) {
             newReasoning.push(progressText)
