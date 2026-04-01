@@ -290,10 +290,6 @@ export class AgentService {
           result,
         })
 
-        // 不再把 result.message 加入 reasoning，避免在思考过程中重复显示工具结果
-        // tool_result 已经通过 onProgress 单独推送给前端处理
-        onProgress({ type: 'tool_result', data: { tool: toolCall.name, success: result.success, message: result.message } })
-
         // =============================================
         // 智能重试机制：当工具返回 retryHint 时，让 AI 重新理解参数
         // =============================================
@@ -359,6 +355,10 @@ ${JSON.stringify(toolCall.arguments, null, 2)}
             continue
           }
         }
+
+        // 不需要重试或重试未生成有效工具调用时，推送最终结果
+        const finalResult = toolResults[toolResults.length - 1].result
+        onProgress({ type: 'tool_result', data: { tool: toolCall.name, success: finalResult.success, message: finalResult.message } })
 
         // 将结果返回给 AI 继续处理
         messages.push({
