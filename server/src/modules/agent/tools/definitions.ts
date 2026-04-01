@@ -11,11 +11,16 @@
 // 类型定义
 // =============================================
 
+/**
+ * 工具参数定义（支持嵌套对象）
+ */
 export interface ToolParameter {
   type: string
   description: string
   enum?: string[]
   required?: boolean
+  // 支持嵌套对象
+  properties?: Record<string, ToolParameter>
 }
 
 export interface ToolDefinition {
@@ -107,7 +112,6 @@ export const TOOLS: Record<string, ToolDefinition> = {
       { filter: { date: '2025-01-15' } },
       { filter: { type: 'taxi' } },
     ],
-    // 自定义校验：必须有 task_id 或 filter
     customValidate: (args) => {
       if (!args.task_id && !args.filter) {
         return '必须提供 task_id 或 filter 参数'
@@ -133,11 +137,11 @@ export const TOOLS: Record<string, ToolDefinition> = {
         updates: {
           type: 'object',
           properties: {
-            title: { type: 'string' },
-            scheduled_time: { type: 'string' },
-            location_name: { type: 'string' },
-            status: { type: 'string', enum: ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled'] },
-            metadata: { type: 'object' },
+            title: { type: 'string', description: '新标题' },
+            scheduled_time: { type: 'string', description: '新时间' },
+            location_name: { type: 'string', description: '新地点' },
+            status: { type: 'string', enum: ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled'], description: '新状态' },
+            metadata: { type: 'object', description: '新元数据' },
           },
           description: '要更新的字段',
           required: true
@@ -167,12 +171,20 @@ export const TOOLS: Record<string, ToolDefinition> = {
           type: 'object',
           properties: {
             date: { type: 'string', description: '查询某天的任务（YYYY-MM-DD）' },
-            date_range: { type: 'object', properties: { start: { type: 'string' }, end: { type: 'string' } }, description: '日期范围' },
+            date_range: { 
+              type: 'object', 
+              properties: { 
+                start: { type: 'string', description: '开始日期' }, 
+                end: { type: 'string', description: '结束日期' } 
+              }, 
+              description: '日期范围' 
+            },
             type: { type: 'string', description: '按类型筛选' },
             status: { type: 'string', description: '按状态筛选' },
             keyword: { type: 'string', description: '按关键词筛选' },
             include_expired: { type: 'boolean', description: '是否包含过期任务' },
           },
+          description: '筛选条件'
         },
         limit: { type: 'number', description: '返回数量限制' },
       },
@@ -196,6 +208,7 @@ export const TOOLS: Record<string, ToolDefinition> = {
           properties: {
             keyword: { type: 'string', description: '按关键词匹配' },
           },
+          description: '筛选条件'
         },
       },
       required: [],
@@ -280,8 +293,8 @@ export const TOOLS: Record<string, ToolDefinition> = {
         time_range: { 
           type: 'object', 
           properties: { 
-            start: { type: 'string' }, 
-            end: { type: 'string' } 
+            start: { type: 'string', description: '开始时间' }, 
+            end: { type: 'string', description: '结束时间' } 
           },
           description: '时间范围'
         },
