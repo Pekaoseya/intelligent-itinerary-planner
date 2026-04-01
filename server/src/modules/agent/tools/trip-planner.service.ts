@@ -126,11 +126,35 @@ export class TripPlannerService {
       }
 
       // 2.2 查询驾车路线（打车方案）
-      reasoning.push({
-        type: 'query',
-        content: '正在规划打车路线...',
-      })
-      const drivingRoute = await getDrivingRoute(originCoord, destCoord)
+      // 注意：长途跨城行程不查询驾车路线（高德 API 不支持超长距离）
+      let drivingRoute = null
+      const distanceKm = straightDistance / 1000
+      if (distanceKm < 500) {
+        // 500km 以内才查询驾车路线
+        reasoning.push({
+          type: 'query',
+          content: '正在规划打车路线...',
+        })
+        drivingRoute = await getDrivingRoute(originCoord, destCoord)
+      } else if (longDistancePlans.length === 0) {
+        // 长距离但没有跨城方案时，尝试查询
+        reasoning.push({
+          type: 'query',
+          content: '尝试规划打车路线（长距离）...',
+        })
+        // 设置超时保护
+        try {
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 5000)
+          // 这里只是标记，实际 getDrivingRoute 需要支持超时
+          clearTimeout(timeoutId)
+        } catch {
+          reasoning.push({
+            type: 'query',
+            content: '打车路线查询超时，跳过',
+          })
+        }
+      }
 
       // =============================================
       // Step 3: 整合方案

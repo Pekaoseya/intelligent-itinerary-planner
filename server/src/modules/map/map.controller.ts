@@ -75,13 +75,6 @@ export class MapController {
     return { code: 200, msg: 'success', data }
   }
 
-  @Post('plan-trip')
-  async planTrip(
-    @Body() body: { origin: string; destination: string; departureTime?: string }
-  ) {
-    console.log('综合出行规划请求:', body)
-    const departure = body.departureTime ? new Date(body.departureTime) : undefined
-    const data = await this.mapService.planTrip(body.origin, body.destination, departure)
-    return { code: 200, msg: 'success', data }
-  }
+  // 注意：综合出行规划（plan-trip）已迁移到 Agent 的 trip_plan 工具
+  // 新的行程规划使用高德长途交通 API，支持真实车次/航班查询
 }

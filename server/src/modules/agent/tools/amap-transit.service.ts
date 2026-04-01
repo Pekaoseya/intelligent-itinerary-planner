@@ -294,18 +294,31 @@ export class AmapTransitService {
         const railway = seg.railway
         const distance = parseInt(railway.distance)
         const duration = parseInt(railway.time)
-        const [orgLng, orgLat] = railway.departure_stop.location.split(' ').map(Number)
-        const [destLng, destLat] = railway.arrival_stop.location.split(' ').map(Number)
+        
+        // 安全解析坐标（高铁 location 格式为 "lng lat"，用空格分隔）
+        let orgLat = 0, orgLng = 0, destLat = 0, destLng = 0
+        if (railway.departure_stop?.location) {
+          const coords = railway.departure_stop.location.split(/[\s,]/).map(Number)
+          if (coords.length >= 2) {
+            [orgLng, orgLat] = coords
+          }
+        }
+        if (railway.arrival_stop?.location) {
+          const coords = railway.arrival_stop.location.split(/[\s,]/).map(Number)
+          if (coords.length >= 2) {
+            [destLng, destLat] = coords
+          }
+        }
 
         // 解析出发/到达时间
-        const departTime = this.formatRailwayTime(railway.departure_stop.time)
-        const arriveTime = this.formatRailwayTime(railway.arrival_stop.time)
+        const departTime = railway.departure_stop?.time ? this.formatRailwayTime(railway.departure_stop.time) : ''
+        const arriveTime = railway.arrival_stop?.time ? this.formatRailwayTime(railway.arrival_stop.time) : ''
 
         segments.push({
           type: 'railway',
-          name: `${railway.trip} ${railway.departure_stop.name}→${railway.arrival_stop.name}`,
-          origin: { name: railway.departure_stop.name, location: { lat: orgLat, lng: orgLng } },
-          destination: { name: railway.arrival_stop.name, location: { lat: destLat, lng: destLng } },
+          name: `${railway.trip || '高铁'} ${railway.departure_stop?.name || '出发站'}→${railway.arrival_stop?.name || '到达站'}`,
+          origin: { name: railway.departure_stop?.name || '出发站', location: { lat: orgLat, lng: orgLng } },
+          destination: { name: railway.arrival_stop?.name || '到达站', location: { lat: destLat, lng: destLng } },
           distance,
           duration,
           cost: this.estimateRailwayCost(distance),
