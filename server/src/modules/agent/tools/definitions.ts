@@ -140,9 +140,9 @@ export const TOOLS = {
     parameters: {
       type: 'object',
       properties: {
-        origin: { type: 'string', description: '出发地' },
-        destination: { type: 'string', description: '目的地' },
-        scheduled_time: { type: 'string', description: '用车时间（立即用车传当前时间）' },
+        origin: { type: 'string', description: '出发地（也叫 start、from、pickup）' },
+        destination: { type: 'string', description: '目的地（也叫 end、to、dropoff）' },
+        scheduled_time: { type: 'string', description: '用车时间（也叫 time、datetime、pickup_time）' },
       },
       required: ['origin', 'destination'],
     },
@@ -180,8 +180,8 @@ export const TOOLS = {
     parameters: {
       type: 'object',
       properties: {
-        scheduled_time: { type: 'string', description: '要检查的时间' },
-        duration_minutes: { type: 'number', description: '持续时长（分钟）' },
+        scheduled_time: { type: 'string', description: '要检查的时间（也叫 time、datetime、check_time）' },
+        duration_minutes: { type: 'number', description: '持续时长（分钟，也叫 duration、length）' },
       },
     },
   },
@@ -193,14 +193,14 @@ export const TOOLS = {
     parameters: {
       type: 'object',
       properties: {
-        date: { type: 'string', description: '日期（YYYY-MM-DD）' },
+        date: { type: 'string', description: '日期（YYYY-MM-DD，也叫 day、check_date）' },
         time_range: { 
           type: 'object', 
           properties: { 
             start: { type: 'string' }, 
             end: { type: 'string' } 
           },
-          description: '时间范围'
+          description: '时间范围（也叫 range、period）'
         },
       },
     },
@@ -213,14 +213,14 @@ export const TOOLS = {
     parameters: {
       type: 'object',
       properties: {
-        origin: { type: 'string', description: '出发地（可选，默认使用当前位置）' },
-        destination: { type: 'string', description: '目的地' },
-        departure_time: { type: 'string', description: '出发时间（ISO格式，可选）' },
-        arrival_time: { type: 'string', description: '期望到达时间（ISO格式，可选）' },
+        origin: { type: 'string', description: '出发地（也叫 start、from、start_location）' },
+        destination: { type: 'string', description: '目的地（也叫 end、to、end_location）' },
+        departure_time: { type: 'string', description: '出发时间（也叫 date、time）' },
+        arrival_time: { type: 'string', description: '期望到达时间（可选）' },
         preferred_mode: { 
           type: 'string', 
           enum: ['taxi', 'train', 'flight'],
-          description: '优先交通方式（可选）' 
+          description: '优先交通方式（也叫 mode、preference）' 
         },
         notes: { type: 'string', description: '备注信息（可选）' },
       },

@@ -19,7 +19,15 @@ export async function executeTaxiCall(
   userId: string,
   userLocation?: UserLocation
 ): Promise<ToolResult> {
-  const { origin, destination, scheduled_time } = args
+  // 参数别名映射（兼容 AI 返回的不同参数名）
+  const normalizedArgs = {
+    ...args,
+    origin: args.origin || args.start || args.from || args.start_location || args.pickup,
+    destination: args.destination || args.end || args.to || args.end_location || args.dropoff,
+    scheduled_time: args.scheduled_time || args.time || args.datetime || args.pickup_time,
+  }
+
+  const { origin, destination, scheduled_time } = normalizedArgs
 
   // 确定起点名称
   let originName = origin
