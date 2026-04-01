@@ -39,7 +39,7 @@ export const TOOLS = {
     parameters: {
       type: 'object',
       properties: {
-        task_id: { type: 'string', description: '要删除的任务ID' },
+        task_id: { type: 'string', description: '要删除的任务ID（单个任务）' },
         filter: { 
           type: 'object',
           properties: {
@@ -56,7 +56,7 @@ export const TOOLS = {
             status: { type: 'string', description: '按状态筛选' },
             keyword: { type: 'string', description: '按关键词筛选' },
             expired: { type: 'boolean', description: '只删除过期的' },
-            all: { type: 'boolean', description: '删除所有' },
+            all: { type: 'boolean', description: '删除所有任务（用户说"删除所有"时设为 true）' },
           },
           description: '筛选条件（不传task_id时使用）'
         },
@@ -213,14 +213,17 @@ export const TOOLS = {
     parameters: {
       type: 'object',
       properties: {
-        origin: { type: 'string', description: '出发地（也叫 start、from、start_location）' },
-        destination: { type: 'string', description: '目的地（也叫 end、to、end_location）' },
-        departure_time: { type: 'string', description: '出发时间（也叫 date、time）' },
+        origin: { type: 'string', description: '出发地（可选，默认使用当前位置）' },
+        destination: { 
+          type: 'string', 
+          description: '目的地（必填！用户说的"去某地"、"到某地"、"某地行程"中的"某地"就是目的地）' 
+        },
+        departure_time: { type: 'string', description: '出发时间（用户说的"明天"、"下周"等时间）' },
         arrival_time: { type: 'string', description: '期望到达时间（可选）' },
         preferred_mode: { 
           type: 'string', 
           enum: ['taxi', 'train', 'flight'],
-          description: '优先交通方式（也叫 mode、preference）' 
+          description: '优先交通方式（可选）' 
         },
         notes: { type: 'string', description: '备注信息（可选）' },
       },

@@ -152,16 +152,65 @@ export async function executeTripPlan(
   onProgress?: ProgressCallback
 ): Promise<ToolResult> {
   try {
+    // 打印原始参数，方便调试
+    console.log('[executeTripPlan] 原始参数:', JSON.stringify(args, null, 2))
+    
     // 参数别名映射（兼容 AI 返回的不同参数名）
-    const origin = (args.origin || args.start || args.from || args.start_location) as string | undefined
-    const destination = (args.destination || args.end || args.to || args.end_location) as string | undefined
-    const departureTime = (args.departure_time || args.date || args.time || args.departure_date) as string | undefined
-    const preferredMode = (args.preferred_mode || args.preference || args.mode || args.preferred_transport) as 'taxi' | 'train' | 'flight' | undefined
+    // 目的地的各种可能命名
+    const destination = (
+      args.destination || 
+      args.end || 
+      args.to || 
+      args.end_location || 
+      args.target || 
+      args.target_location || 
+      args.place || 
+      args.location || 
+      args.city || 
+      args.where ||
+      args.arrive_at ||
+      args.arrival_location
+    ) as string | undefined
+    
+    // 出发地的各种可能命名
+    const origin = (
+      args.origin || 
+      args.start || 
+      args.from || 
+      args.start_location || 
+      args.departure_location ||
+      args.pickup ||
+      args.leave_from
+    ) as string | undefined
+    
+    // 出发时间的各种可能命名
+    const departureTime = (
+      args.departure_time || 
+      args.date || 
+      args.time || 
+      args.departure_date ||
+      args.when ||
+      args.leave_time ||
+      args.start_time
+    ) as string | undefined
+    
+    // 交通方式的可能命名
+    const preferredMode = (
+      args.preferred_mode || 
+      args.preference || 
+      args.mode || 
+      args.preferred_transport ||
+      args.transport ||
+      args.transport_type
+    ) as 'taxi' | 'train' | 'flight' | undefined
+    
+    console.log('[executeTripPlan] 映射后参数:', { origin, destination, departureTime, preferredMode })
     
     if (!destination) {
+      console.log('[executeTripPlan] 缺少目的地参数，可用参数:', Object.keys(args))
       return {
         success: false,
-        error: '请提供目的地',
+        error: '请提供目的地（destination 参数）',
       }
     }
 

@@ -264,7 +264,29 @@ async function getRouteByType(
 // =============================================
 
 export async function executeTaskDelete(args: any, userId: string): Promise<ToolResult> {
-  const { task_id, filter } = args
+  // 打印原始参数，方便调试
+  console.log('[executeTaskDelete] 原始参数:', JSON.stringify(args, null, 2))
+  
+  // 参数别名映射（兼容 AI 返回的不同参数名）
+  const normalizedArgs = {
+    ...args,
+    task_id: args.task_id || args.id || args.taskId,
+    filter: args.filter || args.conditions || args.query || {},
+  }
+  
+  // 处理 filter 内部的别名
+  if (normalizedArgs.filter) {
+    normalizedArgs.filter = {
+      ...normalizedArgs.filter,
+      all: normalizedArgs.filter.all || normalizedArgs.filter.delete_all || normalizedArgs.filter.clear_all,
+      date: normalizedArgs.filter.date || normalizedArgs.filter.day || normalizedArgs.filter.target_date,
+      keyword: normalizedArgs.filter.keyword || normalizedArgs.filter.search || normalizedArgs.filter.match,
+    }
+  }
+  
+  console.log('[executeTaskDelete] 映射后参数:', JSON.stringify(normalizedArgs, null, 2))
+  
+  const { task_id, filter } = normalizedArgs
 
   // 按ID删除单个任务
   if (task_id) {
