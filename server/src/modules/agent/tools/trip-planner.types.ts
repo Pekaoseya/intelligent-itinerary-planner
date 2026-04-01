@@ -34,10 +34,10 @@ export interface TripPlanRequest {
   origin: Location
   /** 目的地 */
   destination: Location
-  /** 出发时间（可选，默认立即出发） */
-  departureTime?: Date
+  /** 出发时间（可选，可以是自然语言如"明天下午"，由 LLM 解析） */
+  departureTime?: Date | string
   /** 到达时间（可选） */
-  arrivalTime?: Date
+  arrivalTime?: Date | string
   /** 期望交通方式（可选） */
   preferredMode?: TransportMode
   /** 用户位置（用于智能选择起点） */
