@@ -22,7 +22,7 @@ export interface Location {
 }
 
 /** 交通方式 */
-export type TransportMode = 'taxi' | 'train' | 'flight' | 'walking' | 'subway' | 'bus'
+export type TransportMode = 'taxi' | 'train' | 'flight' | 'walking' | 'subway' | 'bus' | 'railway'
 
 // =============================================
 // 行程规划请求
@@ -70,6 +70,16 @@ export interface RouteSegment {
   steps?: RouteStep[]
   /** 线路编码（可选） */
   polyline?: Coordinate[]
+  /** 高铁车次号 */
+  trainNo?: string
+  /** 高铁类型 */
+  trainType?: string
+  /** 出发时间 */
+  departureTime?: string
+  /** 到达时间 */
+  arrivalTime?: string
+  /** 替代班次 */
+  alternatives?: Array<{ id: string; name: string }>
 }
 
 /** 路径步骤 */
@@ -124,6 +134,7 @@ export interface SplitTask {
     flightNo?: string
     trainNo?: string
     polyline?: Coordinate[]
+    alternatives?: Array<{ id: string; name: string }>
   }
   /** 说明 */
   description?: string
