@@ -97,15 +97,14 @@ export const TOOLS: Record<string, ToolDefinition> = {
         filter: { 
           type: 'object',
           properties: {
-            type: { type: 'string', description: '按类型筛选' },
-            date: { type: 'string', description: '按日期筛选（YYYY-MM-DD）' },
-            date_range: { 
-              type: 'object', 
-              properties: { 
-                start: { type: 'string', description: '开始日期' }, 
-                end: { type: 'string', description: '结束日期' } 
-              },
-              description: '按日期范围筛选' 
+            type: { 
+              type: 'string', 
+              enum: ['taxi', 'train', 'flight', 'meeting', 'dining', 'hotel', 'todo', 'other'],
+              description: '按类型筛选' 
+            },
+            date: { 
+              type: 'string', 
+              description: '日期筛选。单个日期如 "2025-01-15"；日期范围如 ["2025-01-15", "2025-01-16"]' 
             },
             status: { type: 'string', description: '按状态筛选' },
             keyword: { type: 'string', description: '按关键词筛选' },
@@ -122,6 +121,7 @@ export const TOOLS: Record<string, ToolDefinition> = {
       { task_id: 'abc123' },
       { filter: { all: true } },
       { filter: { date: '2025-01-15' } },
+      { filter: { date: ['2025-01-15', '2025-01-16'] } },
       { filter: { type: 'taxi' } },
     ],
     customValidate: (args) => {
@@ -131,6 +131,13 @@ export const TOOLS: Record<string, ToolDefinition> = {
       // 检测 task_id 是否为有效的 UUID 格式
       if (args.task_id && !isValidUUID(args.task_id)) {
         return `task_id 格式错误：应该是一个有效的任务 ID（UUID 格式），而不是描述性文本。如果不知道任务 ID，请使用 filter 参数按条件查找任务。`
+      }
+      // 检测 filter.type 是否为有效的枚举值
+      if (args.filter?.type) {
+        const validTypes = ['taxi', 'train', 'flight', 'meeting', 'dining', 'hotel', 'todo', 'other']
+        if (!validTypes.includes(args.filter.type)) {
+          return `filter.type 值错误："${args.filter.type}" 不是有效的任务类型。有效值: ${validTypes.join(', ')}`
+        }
       }
       return null
     },
@@ -203,16 +210,15 @@ export const TOOLS: Record<string, ToolDefinition> = {
         filter: {
           type: 'object',
           properties: {
-            date: { type: 'string', description: '查询某天的任务（YYYY-MM-DD）' },
-            date_range: { 
-              type: 'object', 
-              properties: { 
-                start: { type: 'string', description: '开始日期' }, 
-                end: { type: 'string', description: '结束日期' } 
-              }, 
-              description: '日期范围' 
+            date: { 
+              type: 'string', 
+              description: '日期筛选。单个日期如 "2025-01-15"；日期范围如 ["2025-01-15", "2025-01-16"]' 
             },
-            type: { type: 'string', description: '按类型筛选' },
+            type: { 
+              type: 'string', 
+              enum: ['taxi', 'train', 'flight', 'meeting', 'dining', 'hotel', 'todo', 'other'],
+              description: '按类型筛选' 
+            },
             status: { type: 'string', description: '按状态筛选' },
             keyword: { type: 'string', description: '按关键词筛选' },
             include_expired: { type: 'boolean', description: '是否包含过期任务' },
@@ -225,6 +231,7 @@ export const TOOLS: Record<string, ToolDefinition> = {
     },
     examples: [
       { filter: { date: '2025-01-15' } },
+      { filter: { date: ['2025-01-15', '2025-01-16'] } },
       { filter: { type: 'taxi', include_expired: true } },
     ],
   },

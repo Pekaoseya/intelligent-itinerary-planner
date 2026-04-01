@@ -35,6 +35,26 @@ export function getDateRangeQuery(
 }
 
 /**
+ * 统一处理 date 参数，支持字符串或数组
+ * - 字符串 "2025-01-15" → 单日查询
+ * - 数组 ["2025-01-15", "2025-01-16"] → 范围查询
+ * @param date 日期参数（字符串或数组）
+ * @returns 日期范围 { start, end }
+ */
+export function parseDateParam(
+  date: string | string[]
+): { start: string; end: string } {
+  if (Array.isArray(date)) {
+    // 数组 → 范围查询
+    const [start, end] = date
+    return getDateRangeQuery(start, end)
+  } else {
+    // 字符串 → 单日查询
+    return getDayRange(date)
+  }
+}
+
+/**
  * 构建日期范围查询的 Supabase 查询
  * @param query Supabase 查询对象
  * @param date 单个日期 YYYY-MM-DD

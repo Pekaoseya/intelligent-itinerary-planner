@@ -14,7 +14,7 @@
 import { getSupabaseClient } from '../../../storage/database/supabase-client'
 import { ToolResult } from './definitions'
 import { DEFAULT_LOCATION } from './constants'
-import { getDayRange, getDateRangeQuery } from './date-utils'
+import { getDayRange, getDateRangeQuery, parseDateParam } from './date-utils'
 import {
   getCoordinates,
   getLastDestination,
@@ -279,11 +279,9 @@ export async function executeTaskDelete(args: any, userId: string): Promise<Tool
       // 删除所有
     } else {
       if (filter.type) query = query.eq('type', filter.type)
-      if (filter.date_range?.start && filter.date_range?.end) {
-        const range = getDateRangeQuery(filter.date_range.start, filter.date_range.end)
-        query = query.gte('scheduled_time', range.start).lte('scheduled_time', range.end)
-      } else if (filter.date) {
-        const range = getDayRange(filter.date)
+      // 统一处理 date 参数（支持字符串或数组）
+      if (filter.date) {
+        const range = parseDateParam(filter.date)
         query = query.gte('scheduled_time', range.start).lte('scheduled_time', range.end)
       }
       if (filter.status) query = query.eq('status', filter.status)
@@ -402,12 +400,9 @@ export async function executeTaskQuery(args: any, userId: string): Promise<ToolR
   let query = supabase.from('tasks').select('*').eq('user_id', userId)
 
   if (filter) {
+    // 统一处理 date 参数（支持字符串或数组）
     if (filter.date) {
-      const range = getDayRange(filter.date)
-      query = query.gte('scheduled_time', range.start).lte('scheduled_time', range.end)
-    }
-    if (filter.date_range) {
-      const range = getDateRangeQuery(filter.date_range.start, filter.date_range.end)
+      const range = parseDateParam(filter.date)
       query = query.gte('scheduled_time', range.start).lte('scheduled_time', range.end)
     }
     if (filter.type) query = query.eq('type', filter.type)

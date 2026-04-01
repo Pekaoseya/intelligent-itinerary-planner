@@ -596,30 +596,6 @@ ${locationInfo}
 
 ${TOOL_NAMES.map(t => `- ${t.name}: ${t.description}`).join('\n')}
 
-## 常用参数
-
-### trip_plan（行程规划）
-- origin: 出发地
-- destination: 目的地
-- departure_time: 出发时间
-
-### task_create / task_update（任务）
-- type: 任务类型（taxi/train/flight/meeting/dining/hotel/todo/other）
-- scheduled_time: 任务时间
-- location_name: 地点
-- destination_name: 目的地
-
-### task_delete / task_query
-- filter: 筛选条件对象（注意：date_range 必须在 filter 内，不要作为顶级参数）
-  - date: 单个日期（如 "2025-01-15"）
-  - date_range: 日期范围（如 { "start": "2025-01-15", "end": "2025-01-16" }）
-  - type: 任务类型（taxi/train/flight/meeting/dining 等，不要用"行程"这种中文名）
-  - keyword: 关键词
-
-### task_query
-- date: 日期（YYYY-MM-DD）
-- filter: 筛选条件对象
-
 ## 响应格式
 
 以 JSON 格式回复，包含 reasoning（思考过程）、tool_calls（工具调用）、content（直接回复用户）。
