@@ -610,7 +610,11 @@ ${TOOL_NAMES.map(t => `- ${t.name}: ${t.description}`).join('\n')}
 
 ### task_delete / task_update
 - task_id: 任务ID（UUID格式）
-- filter: 筛选条件（包含 keyword、date、type 等）
+- filter: 筛选条件对象
+  - date: 单个日期（如 "2025-01-15"）
+  - date_range: 日期范围（如 { "start": "2025-01-15", "end": "2025-01-16" }）
+  - type: 任务类型
+  - keyword: 关键词
 
 ### task_query
 - date: 日期（YYYY-MM-DD）
