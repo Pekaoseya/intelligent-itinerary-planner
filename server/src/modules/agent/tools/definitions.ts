@@ -8,6 +8,18 @@
  */
 
 // =============================================
+// 辅助函数
+// =============================================
+
+/**
+ * 检测字符串是否为有效的 UUID 格式
+ */
+function isValidUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  return uuidRegex.test(str)
+}
+
+// =============================================
 // 类型定义
 // =============================================
 
@@ -116,6 +128,10 @@ export const TOOLS: Record<string, ToolDefinition> = {
       if (!args.task_id && !args.filter) {
         return '必须提供 task_id 或 filter 参数'
       }
+      // 检测 task_id 是否为有效的 UUID 格式
+      if (args.task_id && !isValidUUID(args.task_id)) {
+        return `task_id 格式错误：应该是一个有效的任务 ID（UUID 格式），而不是描述性文本。如果不知道任务 ID，请使用 filter 参数按条件查找任务。`
+      }
       return null
     },
   },
@@ -156,6 +172,23 @@ export const TOOLS: Record<string, ToolDefinition> = {
     customValidate: (args) => {
       if (!args.task_id && !args.filter?.keyword) {
         return '必须提供 task_id 或 filter.keyword'
+      }
+      // 检测 task_id 是否为有效的 UUID 格式
+      if (args.task_id && !isValidUUID(args.task_id)) {
+        return `task_id 格式错误：应该是一个有效的任务 ID（UUID 格式），而不是描述性文本。如果不知道任务 ID，请使用 filter.keyword 参数按关键词查找任务。`
+      }
+      // 检测 updates 中是否有错误的参数名
+      if (args.updates) {
+        const wrongParams = Object.keys(args.updates).filter(key => 
+          !['title', 'scheduled_time', 'location_name', 'status', 'metadata', 'description', 'type', 'destination_name'].includes(key)
+        )
+        if (wrongParams.length > 0) {
+          return `updates 中包含未知参数: ${wrongParams.join(', ')}。正确参数: title, scheduled_time, location_name, status, metadata, description, type, destination_name`
+        }
+        // 常见错误：使用 time 而非 scheduled_time
+        if (args.updates.time) {
+          return `参数错误: updates 中应使用 scheduled_time 而非 time。正确示例: { "scheduled_time": "2025-01-15T10:00:00+08:00" }`
+        }
       }
       return null
     },
