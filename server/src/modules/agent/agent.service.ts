@@ -294,6 +294,72 @@ export class AgentService {
         // tool_result 已经通过 onProgress 单独推送给前端处理
         onProgress({ type: 'tool_result', data: { tool: toolCall.name, success: result.success, message: result.message } })
 
+        // =============================================
+        // 智能重试机制：当工具返回 retryHint 时，让 AI 重新理解参数
+        // =============================================
+        if (!result.success && result.data?.retryHint) {
+          this.logger.log(`[Agent] 工具 ${toolCall.name} 参数有误，触发智能重试`)
+          
+          // 构建重试提示，让 AI 理解正确的参数
+          const retryPrompt = `${result.error}
+
+你之前调用的参数是:
+${JSON.stringify(toolCall.arguments, null, 2)}
+
+请仔细理解参数说明，然后用正确的参数名重新调用工具。`
+
+          // 让 AI 重新生成工具调用
+          const retryStream = this.llmClient.stream(
+            [
+              { role: 'system', content: this.buildSystemPrompt(userId, userLocation) },
+              { role: 'user', content: retryPrompt }
+            ],
+            { model: 'doubao-seed-1-6-lite-251015', temperature: 0.1 }
+          )
+
+          let retryContent = ''
+          try {
+            for await (const chunk of retryStream) {
+              if (chunk.content) {
+                retryContent += chunk.content
+              }
+            }
+          } catch (retryStreamError) {
+            this.logger.error('重试流式调用失败:', retryStreamError)
+          }
+
+          this.logger.log(`[Agent] AI 重试响应: ${retryContent}`)
+
+          // 解析重试响应，提取新的工具调用
+          const retryParsed = this.parseAIResponse(retryContent)
+          if (retryParsed.toolCalls && retryParsed.toolCalls.length > 0) {
+            // 用新的工具调用替换原来失败的调用
+            const retryToolCall = retryParsed.toolCalls[0]
+            this.logger.log(`[Agent] AI 重试调用: ${retryToolCall.name}, 参数: ${JSON.stringify(retryToolCall.arguments)}`)
+            
+            // 重新执行工具
+            const retryResult = await executeTool(retryToolCall.name, retryToolCall.arguments, userId, userLocation, toolProgressCallback)
+            
+            // 更新结果
+            toolResults[toolResults.length - 1] = {
+              tool: retryToolCall.name,
+              args: retryToolCall.arguments,
+              result: retryResult,
+            }
+
+            // 更新消息列表
+            messages.push({
+              role: 'tool',
+              name: retryToolCall.name,
+              tool_call_id: retryToolCall.id,
+              content: JSON.stringify(retryResult),
+            })
+            
+            onProgress({ type: 'tool_result', data: { tool: retryToolCall.name, success: retryResult.success, message: retryResult.message } })
+            continue
+          }
+        }
+
         // 将结果返回给 AI 继续处理
         messages.push({
           role: 'tool',
