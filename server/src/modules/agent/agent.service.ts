@@ -47,6 +47,7 @@ export interface AgentResponse {
 interface StoredMessage {
   role: string
   content: string
+  tool_calls?: any[]
 }
 
 @Injectable()
@@ -107,7 +108,7 @@ export class AgentService {
   private async loadRecentMessages(conversationId: string, limit: number = 10): Promise<StoredMessage[]> {
     const { data, error } = await this.supabase
       .from('messages')
-      .select('role, content')
+      .select('role, content, tool_calls')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true })
       .limit(limit)
@@ -196,10 +197,37 @@ export class AgentService {
 
     // 添加历史消息
     for (const msg of historyMessages) {
-      messages.push({
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content,
-      })
+      // 如果消息包含工具调用结果，将其格式化为文本
+      if (msg.tool_calls && msg.tool_calls.length > 0) {
+        const toolResultsText = msg.tool_calls.map(tc => {
+          const result = tc.result
+          if (result?.data?.pendingTasks || result?.data?.splitTasks) {
+            const tasks = result.data.pendingTasks || result.data.splitTasks || []
+            const taskList = tasks.map((t: any) => 
+              `- ${t.title} (${t.type}, ${t.scheduled_time})`
+            ).join('\n')
+            return `[之前的规划结果] 工具: ${tc.tool}\n待确认任务:\n${taskList}`
+          }
+          return null
+        }).filter(Boolean).join('\n\n')
+        
+        if (toolResultsText) {
+          messages.push({
+            role: msg.role as 'user' | 'assistant',
+            content: `${msg.content}\n\n${toolResultsText}`,
+          })
+        } else {
+          messages.push({
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+          })
+        }
+      } else {
+        messages.push({
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content,
+        })
+      }
     }
 
     // 添加当前用户消息

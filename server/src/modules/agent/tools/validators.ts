@@ -202,3 +202,99 @@ export function validateKeyword(keyword: string): string | null {
   }
   return null
 }
+
+// =============================================
+// 参数名校验函数
+// =============================================
+
+/**
+ * 已知参数名映射（常见错误参数名 -> 正确参数名）
+ * 当 AI 使用错误参数名时，自动提示正确的参数名
+ */
+export const PARAM_NAME_MAPPINGS: Record<string, Record<string, string>> = {
+  trip_plan: {
+    'departure_location': 'origin',
+    'departure_loc': 'origin',
+    'from': 'origin',
+    'departure_date': 'departure_time',
+    'departure_datetime': 'departure_time',
+    'time': 'departure_time',
+    'preference': 'preferred_mode',
+    'transport': 'preferred_mode',
+    'transport_mode': 'preferred_mode',
+    'mode': 'preferred_mode',
+  },
+  task_create: {
+    'type_name': 'type',
+    'task_type': 'type',
+    'time': 'scheduled_time',
+    'datetime': 'scheduled_time',
+    'date': 'scheduled_time',
+    'desc': 'description',
+    'note': 'description',
+    'content': 'description',
+  },
+  task_query: {
+    'type_name': 'type',
+    'task_type': 'type',
+    'status_name': 'status',
+    'task_status': 'status',
+    'time': 'date',
+    'datetime': 'date',
+    'keyword': 'keyword',
+  },
+  task_delete: {
+    'type_name': 'type',
+    'task_type': 'type',
+    'time': 'date',
+    'datetime': 'date',
+  },
+}
+
+/**
+ * 检测未知参数名
+ * @param toolName 工具名称
+ * @param args 传入的参数
+ * @param allowedParams 允许的参数名列表
+ * @returns 错误信息，如果参数名都有效则返回 null
+ */
+export function validateParamNames(
+  toolName: string,
+  args: Record<string, any>,
+  allowedParams: string[]
+): string | null {
+  const unknownParams: string[] = []
+  const suggestions: string[] = []
+  const mapping = PARAM_NAME_MAPPINGS[toolName] || {}
+  
+  for (const param of Object.keys(args)) {
+    // 跳过特殊参数
+    if (param === 'confirm') continue
+    
+    // 检查参数是否在允许列表中
+    if (!allowedParams.includes(param)) {
+      unknownParams.push(param)
+      
+      // 检查是否有映射建议
+      if (mapping[param]) {
+        suggestions.push(`"${param}" 应该是 "${mapping[param]}"`)
+      }
+    }
+  }
+  
+  if (unknownParams.length === 0) {
+    return null
+  }
+  
+  // 构建错误信息
+  const parts: string[] = []
+  parts.push(`参数名错误：${unknownParams.map(p => `"${p}"`).join(', ')} 不是有效的参数名。`)
+  
+  if (suggestions.length > 0) {
+    parts.push(`正确参数名：${suggestions.join('；')}。`)
+  }
+  
+  parts.push(`该工具支持的参数：${allowedParams.join(', ')}。`)
+  
+  return parts.join('')
+}

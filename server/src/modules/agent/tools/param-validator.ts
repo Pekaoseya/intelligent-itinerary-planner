@@ -13,9 +13,10 @@
  */
 
 import { TOOLS, ToolDefinition, ToolResult } from './definitions'
+import { validateParamNames } from './validators'
 
 // 重新导出校验函数，供 definitions.ts 使用
-export { isValidUUID, isValidDateParam, validateTaskId, validateTaskType, validateTaskStatus, validateScheduledTime, validateTitle, validateLimit, validateKeyword, isValidTransportMode, VALID_TASK_TYPES, VALID_TASK_STATUSES, VALID_TRANSPORT_MODES } from './validators'
+export { isValidUUID, isValidDateParam, validateTaskId, validateTaskType, validateTaskStatus, validateScheduledTime, validateTitle, validateLimit, validateKeyword, isValidTransportMode, validateParamNames, VALID_TASK_TYPES, VALID_TASK_STATUSES, VALID_TRANSPORT_MODES } from './validators'
 
 /**
  * 校验工具参数
@@ -36,6 +37,13 @@ export function validateToolParams(
       valid: false, 
       error: `未知工具: ${toolName}` 
     }
+  }
+
+  // 0. 检查参数名是否正确
+  const allowedParams = Object.keys(toolDef.parameters.properties)
+  const paramNameError = validateParamNames(toolName, args, allowedParams)
+  if (paramNameError) {
+    return buildRetryHint(toolDef, paramNameError, args)
   }
 
   // 1. 检查必填参数
