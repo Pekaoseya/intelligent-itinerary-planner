@@ -126,7 +126,7 @@ export function validateTaskId(taskId: string): string | null {
     return 'task_id 不能为空'
   }
   if (!isValidUUID(taskId)) {
-    return `task_id 格式错误：应该是一个有效的任务 ID（UUID 格式），而不是描述性文本。如果不知道任务 ID，请使用 filter 参数按条件查找任务。`
+    return `task_id 格式错误：应该是一个有效的任务 ID（UUID 格式），而不是描述性文本。请使用 task_query 工具查询任务列表获取正确的任务 ID。`
   }
   return null
 }
