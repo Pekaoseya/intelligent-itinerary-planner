@@ -133,9 +133,30 @@ export function validateTaskId(taskId: string): string | null {
 
 /**
  * 校验任务类型
+ * - 字符串：直接校验
+ * - 数组：返回错误提示（不支持多类型查询）
  */
-export function validateTaskType(type: string, fieldName: string = 'type'): string | null {
+export function validateTaskType(type: unknown, fieldName: string = 'type'): string | null {
+  // 检测数组类型
+  if (Array.isArray(type)) {
+    return `${fieldName} 不支持数组。如果需要查询多种类型，请分别调用工具（如：先查询 taxi，再查询 train）。有效类型: ${VALID_TASK_TYPES.join(', ')}`
+  }
+  
+  // 检测非字符串类型
+  if (typeof type !== 'string') {
+    return `${fieldName} 必须是字符串，而不是 ${typeof type}。有效值: ${VALID_TASK_TYPES.join(', ')}`
+  }
+  
+  // 校验枚举值
   if (!isValidTaskType(type)) {
+    // 检测是否是中文描述
+    if (/[\u4e00-\u9fa5]/.test(type)) {
+      return `${fieldName} 值错误："${type}" 是中文描述，请使用英文枚举值。有效值: ${VALID_TASK_TYPES.join(', ')}`
+    }
+    // 检测是否是逗号分隔的字符串
+    if (type.includes(',')) {
+      return `${fieldName} 不支持多值字符串 "${type}"。如果需要查询多种类型，请分别调用工具。有效值: ${VALID_TASK_TYPES.join(', ')}`
+    }
     return `${fieldName} 值错误："${type}" 不是有效的任务类型。有效值: ${VALID_TASK_TYPES.join(', ')}`
   }
   return null
