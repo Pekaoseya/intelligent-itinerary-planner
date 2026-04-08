@@ -53,30 +53,40 @@ export class TaskController {
    */
   @Post('batch')
   async batchCreateTasks(@Body() body: { tasks: any[] }) {
+    console.log('[TaskController] 批量创建任务请求，任务数:', body.tasks?.length)
+    console.log('[TaskController] 请求体:', JSON.stringify(body, null, 2))
+
     try {
       if (!body.tasks || !Array.isArray(body.tasks) || body.tasks.length === 0) {
+        console.error('[TaskController] 请求参数无效：未提供任务列表')
         return { code: 400, msg: '请提供任务列表' }
       }
 
       const results: any[] = []
       const errors: string[] = []
 
-      for (const taskData of body.tasks) {
+      for (let i = 0; i < body.tasks.length; i++) {
+        const taskData = body.tasks[i]
+        console.log(`[TaskController] 处理任务 ${i + 1}/${body.tasks.length}:`, {
+          title: taskData.title,
+          type: taskData.type,
+          scheduled_time: taskData.scheduled_time,
+        })
+
         try {
           const task = await this.taskService.createTask('default-user', taskData)
+          console.log(`[TaskController] 任务 ${i + 1} 创建成功:`, task.id)
           results.push(task)
         } catch (err) {
-          errors.push(`创建「${taskData.title}」失败: ${err.message}`)
+          const errorMessage = `创建「${taskData.title}」失败: ${err.message}`
+          console.error(`[TaskController] 任务 ${i + 1} 创建失败:`, err)
+          errors.push(errorMessage)
         }
       }
 
-      if (errors.length > 0 && results.length === 0) {
-        return { code: 500, msg: '批量创建失败', error: errors.join('; ') }
-      }
-
-      return {
+      const response = {
         code: 200,
-        msg: errors.length > 0 
+        msg: errors.length > 0
           ? `成功创建 ${results.length} 个任务，${errors.length} 个失败`
           : `成功创建 ${results.length} 个任务`,
         data: {
@@ -85,7 +95,15 @@ export class TaskController {
           errors: errors.length > 0 ? errors : undefined,
         },
       }
+
+      console.log('[TaskController] 批量创建完成:', {
+        成功: results.length,
+        失败: errors.length,
+      })
+
+      return response
     } catch (error) {
+      console.error('[TaskController] 批量创建异常:', error)
       return {
         code: 500,
         msg: '批量创建失败',

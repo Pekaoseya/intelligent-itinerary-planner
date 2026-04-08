@@ -153,32 +153,60 @@ export function useConfirm(options: UseConfirmOptions = {}): UseConfirmResult {
   
   // 确认行程规划
   const confirmTripPlan = useCallback(async () => {
-    if (pendingTasks.length === 0) return
-    
+    if (pendingTasks.length === 0) {
+      console.warn('[useConfirm] confirmTripPlan: pendingTasks 为空')
+      return
+    }
+
     try {
       setLoading(true)
       console.log('[useConfirm] 确认行程规划:', pendingTasks.length, '个任务')
-      
+      console.log('[useConfirm] pendingTasks 数据结构:', JSON.stringify(pendingTasks, null, 2))
+
+      // 检查每个任务的必需字段
+      for (let i = 0; i < pendingTasks.length; i++) {
+        const task = pendingTasks[i]
+        console.log(`[useConfirm] 任务 ${i + 1}:`, {
+          title: task.title,
+          type: task.type,
+          scheduled_time: task.scheduled_time,
+          destination_name: task.destination_name,
+          hasMetadata: !!task.metadata,
+        })
+
+        if (!task.title || !task.type || !task.scheduled_time) {
+          console.error(`[useConfirm] 任务 ${i + 1} 缺少必需字段:`, task)
+          Taro.showToast({ title: '任务数据不完整', icon: 'error' })
+          return
+        }
+      }
+
       const result = await taskService.batchCreateTasks(pendingTasks)
+      console.log('[useConfirm] 批量创建结果:', result)
       const createdCount = result.createdCount || pendingTasks.length
-      
+
       Taro.showToast({ title: `已创建 ${createdCount} 个行程任务`, icon: 'success' })
-      
+
       // 生成行程摘要
       const taskSummary = pendingTasks.map((t, i) => `${i + 1}. ${t.title}`).join('\n')
-      
+
       addMessage({
         id: Date.now().toString(),
         role: 'assistant',
         content: `✅ 行程规划已完成，已创建 ${createdCount} 个任务：\n${taskSummary}`,
         timestamp: new Date(),
       })
-      
+
       hideConfirmModal()
       clearAll()
       onScrollToBottom?.()
     } catch (error) {
       console.error('[useConfirm] 行程规划确认失败:', error)
+      console.error('[useConfirm] 错误详情:', {
+        message: (error as any).message,
+        stack: (error as any).stack,
+        response: (error as any).response,
+      })
       Taro.showToast({ title: '创建失败', icon: 'error' })
     } finally {
       setLoading(false)

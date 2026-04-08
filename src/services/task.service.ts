@@ -95,11 +95,17 @@ class TaskService {
    * 批量创建任务
    */
   async batchCreateTasks(tasks: CreateTaskDTO[]): Promise<BatchCreateResult> {
+    console.log('[TaskService] 批量创建任务，任务数:', tasks.length)
+    console.log('[TaskService] 请求数据:', JSON.stringify({ tasks }, null, 2))
+
     const res = await Network.request({
       url: '/api/tasks/batch',
       method: 'POST',
       data: { tasks },
     })
+
+    console.log('[TaskService] 响应数据:', JSON.stringify(res.data, null, 2))
+
     return res.data?.data || { createdCount: 0, tasks: [] }
   }
 

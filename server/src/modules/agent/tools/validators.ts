@@ -139,25 +139,48 @@ export function validateTaskId(taskId: string): string | null {
 export function validateTaskType(type: unknown, fieldName: string = 'type'): string | null {
   // 检测数组类型
   if (Array.isArray(type)) {
-    return `${fieldName} 不支持数组。如果需要查询多种类型，请分别调用工具（如：先查询 taxi，再查询 train）。有效类型: ${VALID_TASK_TYPES.join(', ')}`
+    const invalidTypes = type.filter(t => !isValidTaskType(t))
+    if (invalidTypes.length > 0) {
+      return `${fieldName} 参数错误：传入了数组 [${type.map(t => `"${t}"`).join(', ')}]。\n` +
+             `问题 1：${fieldName} 不支持数组，只能传单个字符串值。\n` +
+             `问题 2：数组中包含无效值：${invalidTypes.map(t => `"${t}"`).join(', ')}。\n` +
+             `正确用法：请选择以下之一：${VALID_TASK_TYPES.join(', ')}\n` +
+             `示例：type: "taxi" 或 type: "train"`
+    }
+    return `${fieldName} 不支持数组格式。如果需要查询多种类型，请分别调用工具（如：先查询 taxi，再查询 train）。有效值: ${VALID_TASK_TYPES.join(', ')}`
   }
-  
+
   // 检测非字符串类型
   if (typeof type !== 'string') {
     return `${fieldName} 必须是字符串，而不是 ${typeof type}。有效值: ${VALID_TASK_TYPES.join(', ')}`
   }
-  
+
   // 校验枚举值
   if (!isValidTaskType(type)) {
     // 检测是否是中文描述
     if (/[\u4e00-\u9fa5]/.test(type)) {
-      return `${fieldName} 值错误："${type}" 是中文描述，请使用英文枚举值。有效值: ${VALID_TASK_TYPES.join(', ')}`
+      return `${fieldName} 值错误："${type}" 是中文描述。\n` +
+             `请使用英文枚举值。对应关系如下：\n` +
+             `- 打车 → taxi\n` +
+             `- 火车 → train\n` +
+             `- 飞机 → flight\n` +
+             `- 会议 → meeting\n` +
+             `- 餐饮 → dining\n` +
+             `- 酒店 → hotel\n` +
+             `- 事务 → todo\n` +
+             `- 其他 → other\n` +
+             `正确示例：type: "taxi"`
     }
     // 检测是否是逗号分隔的字符串
     if (type.includes(',')) {
-      return `${fieldName} 不支持多值字符串 "${type}"。如果需要查询多种类型，请分别调用工具。有效值: ${VALID_TASK_TYPES.join(', ')}`
+      return `${fieldName} 不支持多值字符串 "${type}"。\n` +
+             `问题：传入了逗号分隔的多个类型值。\n` +
+             `正确用法：只能传单个类型值。有效值: ${VALID_TASK_TYPES.join(', ')}\n` +
+             `示例：type: "taxi" 或 type: "train"`
     }
-    return `${fieldName} 值错误："${type}" 不是有效的任务类型。有效值: ${VALID_TASK_TYPES.join(', ')}`
+    return `${fieldName} 值错误："${type}" 不是有效的任务类型。\n` +
+           `有效值（请选择其一）：${VALID_TASK_TYPES.join(', ')}\n` +
+           `示例：type: "taxi"`
   }
   return null
 }

@@ -115,14 +115,14 @@ export const TOOLS: Record<string, ToolDefinition> = {
       type: 'object',
       properties: {
         task_id: { type: 'string', description: '任务ID（按ID删除单个任务）' },
-        date: { 
-          type: 'string', 
-          description: '日期筛选。单日如 "2025-01-15"；范围如 ["2025-01-15", "2025-01-16"]' 
+        date: {
+          type: 'string',
+          description: '日期筛选。单日如 "2025-01-15"；范围如 ["2025-01-15", "2025-01-16"]'
         },
-        type: { 
-          type: 'string', 
+        type: {
+          type: 'string',
           enum: [...VALID_TASK_TYPES],
-          description: '按类型筛选（taxi/train/flight/meeting/dining/hotel/todo/other）' 
+          description: '按类型筛选（必须是以下之一：taxi=打车、train=火车、flight=飞机、meeting=会议、dining=餐饮、hotel=酒店、todo=事务、other=其他）。注意：只能传一个类型值，不支持数组或多个值。'
         },
         keyword: { type: 'string', description: '按关键词筛选任务标题' },
         all: { type: 'boolean', description: '删除所有任务' },
@@ -143,27 +143,27 @@ export const TOOLS: Record<string, ToolDefinition> = {
       if (!args.task_id && !args.date && !args.type && !args.keyword && !args.all) {
         return '请提供删除条件：task_id、date、type、keyword 或 all'
       }
-      
+
       if (args.task_id) {
         const error = validateTaskId(args.task_id)
         if (error) return error
       }
-      
+
       if (args.type) {
         const error = validateTaskType(args.type)
         if (error) return error
       }
-      
+
       if (args.date !== undefined) {
         const result = isValidDateParam(args.date)
         if (!result.valid) return result.error!
       }
-      
+
       if (args.keyword !== undefined) {
         const error = validateKeyword(args.keyword)
         if (error) return error
       }
-      
+
       return null
     },
   },
