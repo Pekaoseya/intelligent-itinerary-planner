@@ -53,12 +53,18 @@ interface ConfirmState {
   recommendedIndex: number
   summary: string
   reasoning: string[]
+
+  // 时间冲突
+  conflicts: any[]  // { task, newTask, overlapMinutes }
+  hasConflict: boolean
+  canConfirm: boolean
   
   // Actions
   showBatchAdd: (tasks: any[]) => void
   showBatchDelete: (tasks: any[], ids: string[]) => void
   showModify: (original: any, updated: any) => void
   showTripPlan: (tasks: any[], routes: RouteInfo[], summary: string, reasoning?: string[]) => void
+  setConflicts: (conflicts: any[], canConfirm: boolean) => void
   hide: () => void
   reset: () => void
   clearPendingTasks: () => void
@@ -78,11 +84,14 @@ const initialState = {
   recommendedIndex: 0,
   summary: '',
   reasoning: [],
+  conflicts: [],
+  hasConflict: false,
+  canConfirm: true,
 }
 
 export const useConfirmStore = create<ConfirmState>((set) => ({
   ...initialState,
-  
+
   showBatchAdd: (tasks) => set({
     visible: true,
     confirmType: 'batch_add',
@@ -94,8 +103,11 @@ export const useConfirmStore = create<ConfirmState>((set) => ({
     routes: [],
     summary: '',
     reasoning: [],
+    conflicts: [],
+    hasConflict: false,
+    canConfirm: true,
   }),
-  
+
   showBatchDelete: (tasks, ids) => set({
     visible: true,
     confirmType: 'batch_delete',
@@ -107,8 +119,11 @@ export const useConfirmStore = create<ConfirmState>((set) => ({
     routes: [],
     summary: '',
     reasoning: [],
+    conflicts: [],
+    hasConflict: false,
+    canConfirm: true,
   }),
-  
+
   showModify: (original, updated) => set({
     visible: true,
     confirmType: 'modify',
@@ -120,8 +135,11 @@ export const useConfirmStore = create<ConfirmState>((set) => ({
     routes: [],
     summary: '',
     reasoning: [],
+    conflicts: [],
+    hasConflict: false,
+    canConfirm: true,
   }),
-  
+
   showTripPlan: (tasks, routes, summary, reasoning = []) => set({
     visible: true,
     confirmType: 'trip_plan',
@@ -134,6 +152,15 @@ export const useConfirmStore = create<ConfirmState>((set) => ({
     pendingDeleteIds: [],
     originalTask: null,
     updatedTask: null,
+    conflicts: [],
+    hasConflict: false,
+    canConfirm: true, // 初始值为 true，稍后通过 setConflicts 更新
+  }),
+
+  setConflicts: (conflicts, canConfirm) => set({
+    conflicts,
+    hasConflict: conflicts.length > 0,
+    canConfirm,
   }),
   
   hide: () => set({ visible: false }),

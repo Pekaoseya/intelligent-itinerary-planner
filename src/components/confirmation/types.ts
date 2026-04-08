@@ -61,11 +61,14 @@ export interface ConfirmModalProps {
   routes?: RouteInfo[]
   summary?: string
   reasoning?: string[]
+  // 冲突检测
+  conflicts?: any[]
+  canConfirm?: boolean
   // 回调
-  onConfirmBatchAdd: () => void
-  onConfirmBatchDelete: () => void
-  onConfirmModify: () => void
-  onConfirmTripPlan: () => void
+  onConfirmBatchAdd?: () => void
+  onConfirmBatchDelete?: () => void
+  onConfirmModify?: () => void
+  onConfirmTripPlan?: () => void
   onCancel: () => void
 }
 

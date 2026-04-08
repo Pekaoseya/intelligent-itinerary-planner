@@ -58,6 +58,8 @@ const Index: FC = () => {
     routes,
     summary,
     reasoning,
+    conflicts,
+    canConfirm,
     confirmBatchAdd,
     confirmBatchDelete,
     confirmModify,
@@ -123,6 +125,8 @@ const Index: FC = () => {
         routes={routes}
         summary={summary}
         reasoning={reasoning}
+        conflicts={conflicts}
+        canConfirm={canConfirm}
         onConfirmBatchAdd={confirmBatchAdd}
         onConfirmBatchDelete={confirmBatchDelete}
         onConfirmModify={confirmModify}

@@ -12,7 +12,7 @@
 import Taro from '@tarojs/taro'
 import { View, Text, ScrollView } from '@tarojs/components'
 import { type FC, useMemo } from 'react'
-import { Plus, Trash2, X, Car, TrainFront, Plane, Users, Utensils, Building2, Check, Pencil, MapPin, Clock, Route, Sparkles } from 'lucide-react-taro'
+import { Plus, Trash2, X, Car, TrainFront, Plane, Users, Utensils, Building2, Check, Pencil, MapPin, Clock, Route, Sparkles, TriangleAlert } from 'lucide-react-taro'
 import { Button } from '@/components/ui/button'
 import type { ConfirmModalProps, PendingTask, RouteInfo } from './types'
 
@@ -153,9 +153,9 @@ const TripTaskCard: FC<{ task: PendingTask; index: number }> = ({ task, index })
 // 思考过程展示
 const ReasoningSection: FC<{ reasoning: string[] }> = ({ reasoning }) => {
   if (!reasoning || reasoning.length === 0) return null
-  
+
   return (
-    <View 
+    <View
       className="bg-blue-50 rounded-lg p-3 mb-4"
       style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden' }}
     >
@@ -173,17 +173,52 @@ const ReasoningSection: FC<{ reasoning: string[] }> = ({ reasoning }) => {
   )
 }
 
+// 时间冲突提示
+const ConflictSection: FC<{ conflicts: any[] }> = ({ conflicts }) => {
+  if (!conflicts || conflicts.length === 0) return null
+
+  return (
+    <View
+      className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4"
+      style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden' }}
+    >
+      <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+        <TriangleAlert size={16} color="#f97316" />
+        <Text className="text-sm font-medium text-orange-600">时间冲突检测</Text>
+      </View>
+      {conflicts.map((conflict, index) => (
+        <View key={index} className="bg-white rounded p-2 mb-2" style={{ border: '1px solid #fed7aa' }}>
+          <Text className="text-xs font-medium text-orange-700 mb-1" style={{ display: 'block' }}>
+            冲突 {index + 1}: &ldquo;{conflict.newTask.title}&rdquo; 与 &ldquo;{conflict.existingTask.title}&rdquo;
+          </Text>
+          <Text className="text-xs text-gray-600 mb-1" style={{ display: 'block' }}>
+            重叠时间: {conflict.overlapMinutes} 分钟
+          </Text>
+          <Text className="text-xs text-gray-500" style={{ display: 'block' }}>
+            已有任务: {new Date(conflict.existingTask.scheduled_time).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} - {new Date(new Date(conflict.existingTask.scheduled_time).getTime() + ((conflict.existingTask.metadata?.duration as number) || 60) * 60000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+        </View>
+      ))}
+      <Text className="text-xs text-orange-700 font-medium" style={{ display: 'block' }}>
+        ⚠️ 存在时间冲突，建议调整时间或取消冲突任务
+      </Text>
+    </View>
+  )
+}
+
 // 行程规划确认
 const TripPlanConfirm: FC<{
   tasks: PendingTask[]
   routes: RouteInfo[]
   summary: string
   reasoning: string[]
+  conflicts: any[]
+  canConfirm: boolean
   onConfirm: () => void
   onCancel: () => void
-}> = ({ tasks, routes, summary, reasoning, onConfirm, onCancel }) => {
+}> = ({ tasks, routes, summary, reasoning, conflicts, canConfirm, onConfirm, onCancel }) => {
   const route = routes[0] // 使用第一个推荐方案
-  
+
   // 计算可用高度
   const scrollViewHeight = useMemo(() => {
     try {
@@ -276,9 +311,9 @@ const TripPlanConfirm: FC<{
       )}
 
       {/* 任务列表 - flex-1 自动填充剩余空间，底部留出 padding 避开按钮 */}
-      <ScrollView 
-        scrollY 
-        style={{ 
+      <ScrollView
+        scrollY
+        style={{
           flex: 1,
           height: `${scrollViewHeight}px`,
           width: '100%',
@@ -289,6 +324,9 @@ const TripPlanConfirm: FC<{
           paddingBottom: '100px'  // 关键：底部留出空间避开按钮
         }}
       >
+        {/* 冲突提示 */}
+        <ConflictSection conflicts={conflicts} />
+
         {/* 思考过程 */}
         <ReasoningSection reasoning={reasoning} />
         
@@ -307,13 +345,13 @@ const TripPlanConfirm: FC<{
       </ScrollView>
 
       {/* 底部按钮 - flex-shrink-0 不压缩，始终可见 */}
-      <View 
-        style={{ 
+      <View
+        style={{
           flexShrink: 0,
-          display: 'flex', 
-          flexDirection: 'row', 
-          gap: '12px', 
-          padding: '16px', 
+          display: 'flex',
+          flexDirection: 'row',
+          gap: '12px',
+          padding: '16px',
           borderTopWidth: '1px',
           borderTopStyle: 'solid',
           borderTopColor: '#f3f4f6',
@@ -326,9 +364,19 @@ const TripPlanConfirm: FC<{
         <Button variant="outline" style={{ flex: 1 }} onClick={onCancel}>
           <Text className="text-gray-600">取消</Text>
         </Button>
-        <Button style={{ flex: 1, backgroundColor: '#a855f7' }} onClick={onConfirm}>
-          <Route size={16} color="#fff" />
-          <Text className="text-white ml-1">确认创建 ({tasks.length}个)</Text>
+        <Button
+          style={{ flex: 1, backgroundColor: canConfirm ? '#a855f7' : '#f97316' }}
+          onClick={canConfirm ? onConfirm : undefined}
+          disabled={!canConfirm}
+        >
+          {canConfirm ? (
+            <>
+              <Route size={16} color="#fff" />
+              <Text className="text-white ml-1">确认创建 ({tasks.length}个)</Text>
+            </>
+          ) : (
+            <Text className="text-white">⚠️ 存在时间冲突</Text>
+          )}
         </Button>
       </View>
     </View>
@@ -338,9 +386,11 @@ const TripPlanConfirm: FC<{
 // 批量创建确认
 const BatchAddConfirm: FC<{
   tasks: PendingTask[]
+  conflicts: any[]
+  canConfirm: boolean
   onConfirm: () => void
   onCancel: () => void
-}> = ({ tasks, onConfirm, onCancel }) => {
+}> = ({ tasks, conflicts, canConfirm, onConfirm, onCancel }) => {
   const scrollViewHeight = useMemo(() => {
     try {
       const systemInfo = Taro.getSystemInfoSync()
@@ -393,9 +443,9 @@ const BatchAddConfirm: FC<{
       </View>
 
       {/* 任务列表 */}
-      <ScrollView 
-        scrollY 
-        style={{ 
+      <ScrollView
+        scrollY
+        style={{
           flex: 1,
           height: `${scrollViewHeight}px`,
           width: '100%',
@@ -406,6 +456,9 @@ const BatchAddConfirm: FC<{
           paddingBottom: '100px'
         }}
       >
+        {/* 冲突提示 */}
+        <ConflictSection conflicts={conflicts} />
+
         <View style={{ marginBottom: '12px', width: '100%' }}>
           <Text className="text-sm text-gray-500">AI 为您规划了以下行程，确认后将添加到日程</Text>
         </View>
@@ -415,13 +468,13 @@ const BatchAddConfirm: FC<{
       </ScrollView>
 
       {/* 底部按钮 */}
-      <View 
-        style={{ 
+      <View
+        style={{
           flexShrink: 0,
-          display: 'flex', 
-          flexDirection: 'row', 
-          gap: '12px', 
-          padding: '16px', 
+          display: 'flex',
+          flexDirection: 'row',
+          gap: '12px',
+          padding: '16px',
           borderTopWidth: '1px',
           borderTopStyle: 'solid',
           borderTopColor: '#f3f4f6',
@@ -434,9 +487,19 @@ const BatchAddConfirm: FC<{
         <Button variant="outline" style={{ flex: 1 }} onClick={onCancel}>
           <Text className="text-gray-600">取消</Text>
         </Button>
-        <Button style={{ flex: 1, backgroundColor: '#22c55e' }} onClick={onConfirm}>
-          <Plus size={16} color="#fff" />
-          <Text className="text-white ml-1">确认添加 ({tasks.length}个)</Text>
+        <Button
+          style={{ flex: 1, backgroundColor: canConfirm ? '#22c55e' : '#f97316' }}
+          onClick={canConfirm ? onConfirm : undefined}
+          disabled={!canConfirm}
+        >
+          {canConfirm ? (
+            <>
+              <Plus size={16} color="#fff" />
+              <Text className="text-white ml-1">确认添加 ({tasks.length}个)</Text>
+            </>
+          ) : (
+            <Text className="text-white">⚠️ 存在时间冲突</Text>
+          )}
         </Button>
       </View>
     </View>
@@ -670,6 +733,8 @@ export const ConfirmModal: FC<ConfirmModalProps> = ({
   routes,
   summary,
   reasoning,
+  conflicts = [],
+  canConfirm = true,
   onConfirmBatchAdd,
   onConfirmBatchDelete,
   onConfirmModify,
@@ -687,7 +752,9 @@ export const ConfirmModal: FC<ConfirmModalProps> = ({
             routes={routes || []}
             summary={summary || ''}
             reasoning={reasoning || []}
-            onConfirm={onConfirmTripPlan}
+            conflicts={conflicts}
+            canConfirm={canConfirm}
+            onConfirm={onConfirmTripPlan || (() => {})}
             onCancel={onCancel}
           />
         ) : null
@@ -695,7 +762,9 @@ export const ConfirmModal: FC<ConfirmModalProps> = ({
         return pendingTasks && pendingTasks.length > 0 ? (
           <BatchAddConfirm
             tasks={pendingTasks}
-            onConfirm={onConfirmBatchAdd}
+            conflicts={conflicts}
+            canConfirm={canConfirm}
+            onConfirm={onConfirmBatchAdd || (() => {})}
             onCancel={onCancel}
           />
         ) : null
@@ -703,7 +772,7 @@ export const ConfirmModal: FC<ConfirmModalProps> = ({
         return pendingDeleteTasks && pendingDeleteTasks.length > 0 ? (
           <BatchDeleteConfirm
             tasks={pendingDeleteTasks}
-            onConfirm={onConfirmBatchDelete}
+            onConfirm={onConfirmBatchDelete || (() => {})}
             onCancel={onCancel}
           />
         ) : null
@@ -712,7 +781,7 @@ export const ConfirmModal: FC<ConfirmModalProps> = ({
           <ModifyConfirm
             originalTask={originalTask}
             updatedTask={updatedTask}
-            onConfirm={onConfirmModify}
+            onConfirm={onConfirmModify || (() => {})}
             onCancel={onCancel}
           />
         )

@@ -3,7 +3,7 @@
  * 封装批量创建/删除/更新任务的确认逻辑
  */
 
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import Taro from '@tarojs/taro'
 import { taskService } from '@/services'
 import { useConfirmStore, type ConfirmType } from '@/stores/confirmStore'
@@ -25,7 +25,10 @@ export interface UseConfirmResult {
   routes: any[]
   summary: string
   reasoning: string[]
-  
+  conflicts: any[]
+  hasConflict: boolean
+  canConfirm: boolean
+
   // 操作
   confirmBatchAdd: () => Promise<void>
   confirmBatchDelete: () => Promise<void>
@@ -48,16 +51,99 @@ export function useConfirm(options: UseConfirmOptions = {}): UseConfirmResult {
     routes,
     summary,
     reasoning,
+    conflicts,
+    hasConflict,
+    canConfirm,
     hide: hideConfirmModal,
     clearPendingTasks,
     clearPendingDeleteTasks,
     clearAll,
+    setConflicts,
   } = useConfirmStore()
   
   const {
     setLoading,
     addMessage,
   } = useChatStore()
+
+  // =============================================
+  // 时间冲突检测
+  // =============================================
+
+  /**
+   * 检测任务时间冲突
+   */
+  const checkConflicts = useCallback(async (tasks: any[]) => {
+    if (tasks.length === 0) {
+      setConflicts([], true)
+      return
+    }
+
+    try {
+      // 获取已有的任务
+      const existingTasks = await taskService.getTasks()
+
+      // 检测每个新任务与已有任务的冲突
+      const conflictList: any[] = []
+      let hasSeriousConflict = false
+
+      for (const newTask of tasks) {
+        const newStart = new Date(newTask.scheduled_time).getTime()
+        const newDuration = newTask.metadata?.duration || 60 // 默认60分钟
+        const newEnd = newStart + newDuration * 60 * 1000
+
+        for (const existingTask of existingTasks) {
+          // 跳过非pending状态的任务
+          if (existingTask.status !== 'pending') continue
+
+          const existingStart = new Date(existingTask.scheduled_time).getTime()
+          // 从 metadata 中获取 duration，如果没有则使用默认值
+          const existingDuration = existingTask.metadata?.duration ? Math.ceil((existingTask.metadata.duration as number) / 60) : 60
+          const existingEnd = existingStart + existingDuration * 60 * 1000
+
+          // 检测时间重叠
+          if (newStart < existingEnd && newEnd > existingStart) {
+            const overlapStart = Math.max(newStart, existingStart)
+            const overlapEnd = Math.min(newEnd, existingEnd)
+            const overlapMinutes = Math.round((overlapEnd - overlapStart) / 60000)
+
+            // 只报告严重冲突（重叠超过5分钟）
+            if (overlapMinutes > 5) {
+              conflictList.push({
+                newTask,
+                existingTask,
+                overlapMinutes,
+              })
+
+              // 严重冲突：重叠超过15分钟
+              if (overlapMinutes > 15) {
+                hasSeriousConflict = true
+              }
+            }
+          }
+        }
+      }
+
+      console.log('[useConfirm] 冲突检测结果:', {
+        总任务数: tasks.length,
+        冲突数: conflictList.length,
+        严重冲突: hasSeriousConflict,
+      })
+
+      // 如果有严重冲突，不允许确认
+      setConflicts(conflictList, !hasSeriousConflict)
+    } catch (error) {
+      console.error('[useConfirm] 冲突检测失败:', error)
+      setConflicts([], true) // 出错时允许确认
+    }
+  }, [setConflicts, taskService])
+
+  // 当 pendingTasks 变化时，自动检测冲突
+  useEffect(() => {
+    if (visible && (confirmType === 'batch_add' || confirmType === 'trip_plan') && pendingTasks.length > 0) {
+      checkConflicts(pendingTasks)
+    }
+  }, [visible, confirmType, pendingTasks, checkConflicts])
   
   // 确认批量创建
   const confirmBatchAdd = useCallback(async () => {
@@ -252,6 +338,9 @@ export function useConfirm(options: UseConfirmOptions = {}): UseConfirmResult {
     routes,
     summary,
     reasoning,
+    conflicts,
+    hasConflict,
+    canConfirm,
     confirmBatchAdd,
     confirmBatchDelete,
     confirmModify,
