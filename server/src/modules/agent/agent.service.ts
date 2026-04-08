@@ -323,14 +323,17 @@ export class AgentService {
         // =============================================
         if (!result.success && result.retryHint) {
           this.logger.log(`[Agent] 工具 ${toolCall.name} 参数有误，触发智能重试`)
-          
+
           // 构建重试提示，让 AI 理解正确的参数
+          // 关键：要包含完整的对话上下文，避免"失忆"
           const retryPrompt = `${result.error}
 
 你之前调用的参数是:
 ${JSON.stringify(toolCall.arguments, null, 2)}
 
 请立即用正确的参数名重新调用工具。
+
+注意：请回顾我们的对话历史，用户之前的选择和偏好。
 
 必须返回 JSON 格式的工具调用，例如：
 \`\`\`json
@@ -350,12 +353,18 @@ ${JSON.stringify(toolCall.arguments, null, 2)}
 
 现在请重新调用工具。`
 
+          // 构建重试消息列表：系统提示 + 历史消息 + 当前重试提示
+          // 这样 AI 才能保持对话上下文
+          const retryMessages: AgentMessage[] = [
+            { role: 'system', content: this.buildSystemPrompt(userId, userLocation, userContextText) },
+            // 包含历史消息（保持对话上下文）
+            ...messages.filter(m => m.role === 'user' || m.role === 'assistant'),
+            { role: 'user', content: retryPrompt }
+          ]
+
           // 让 AI 重新生成工具调用
           const retryStream = this.llmClient.stream(
-            [
-              { role: 'system', content: this.buildSystemPrompt(userId, userLocation) },
-              { role: 'user', content: retryPrompt }
-            ],
+            retryMessages.map(m => ({ role: m.role as 'system' | 'user' | 'assistant', content: m.content })),
             { model: 'doubao-seed-1-6-lite-251015', temperature: 0.1 }
           )
 
@@ -610,9 +619,11 @@ ${locationInfo}
 
 1. **不确定就问，不要猜**：如果用户的表述有歧义或缺少关键信息，直接询问用户
 2. **像人一样对话**：遇到不清楚的地方，自然地追问
-3. **使用具体日期时间调用工具**：当用户说"明天"、"下周三"等相对时间时，请转换为具体日期格式调用工具
-4. **出行需求直接调用 trip_plan**：当用户说"去某地"、"去某地出差/开会"等出行需求时，直接调用 trip_plan 工具规划行程，工具会自动处理交通方式、时间等细节
-5. **确认机制**：
+3. **优先尊重用户明确的选择**：如果用户已经明确指定地点、时间等信息，优先使用用户的选择，不要用画像数据覆盖
+4. **用户画像仅作参考**：只有在用户没有明确指定时，才参考用户画像（如常去地点、出行习惯），并且要明确告诉用户"根据您的习惯，我建议..."
+5. **使用具体日期时间调用工具**：当用户说"明天"、"下周三"等相对时间时，请转换为具体日期格式调用工具
+6. **出行需求直接调用 trip_plan**：当用户说"去某地"、"去某地出差/开会"等出行需求时，直接调用 trip_plan 工具规划行程，工具会自动处理交通方式、时间等细节
+7. **确认机制**：
    - **预览阶段**：当用户第一次表达意图（如"删除4月1日的任务"、"创建明天上午10点的会议"），系统会返回预览信息，不会真正执行
    - **确认阶段**：用户回复"确定"、"好的"、"是的"等确认词时，表示同意执行
    - **执行方式**：回顾之前的对话上下文，找到之前调用的工具名称和参数，然后带上 \`confirm: true\` 参数重新调用**相同的工具**

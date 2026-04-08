@@ -394,8 +394,7 @@ export class UserContextService {
     }
 
     return `## 用户画像
-${lines.join('；')}。
-参考以上偏好做推荐。`
+${lines.join('；')}。`
   }
 
   // =============================================
