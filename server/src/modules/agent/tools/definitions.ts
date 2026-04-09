@@ -65,7 +65,7 @@ export const TOOLS: Record<string, ToolDefinition> = {
   
   task_create: {
     name: 'task_create',
-    description: '创建一个新任务。支持打车、火车、飞机、会议、餐饮、酒店、事务等类型。\n\n**IMPORTANT（重要）：**\n- 只有在所有必要信息都收集完整后才能调用此工具\n- 如果信息不完整，先询问用户，不要调用工具\n- 会议类任务必须包含：标题、时间、地点（如果用户说"附近"，使用"当前位置附近"作为地点）',
+    description: '创建一个新任务。支持打车、火车、飞机、会议、餐饮、酒店、事务等类型。',
     parameters: {
       type: 'object',
       properties: {
@@ -77,7 +77,7 @@ export const TOOLS: Record<string, ToolDefinition> = {
         },
         scheduled_time: { type: 'string', description: '计划时间（ISO格式）' },
         end_time: { type: 'string', description: '结束时间（可选）' },
-        location_name: { type: 'string', description: '地点名称。会议类任务必需。如果用户说"附近"，使用"当前位置附近"' },
+        location_name: { type: 'string', description: '地点名称。如果用户没有明确指定，使用"当前位置附近"' },
         destination_name: { type: 'string', description: '目的地名称（出行类任务必需）' },
       },
       required: [],
