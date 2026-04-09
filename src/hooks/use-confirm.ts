@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect } from 'react'
 import Taro from '@tarojs/taro'
+import { Network } from '@/network'
 import { taskService } from '@/services'
 import { useConfirmStore, type ConfirmType } from '@/stores/confirmStore'
 import { useChatStore } from '@/stores/chatStore'
@@ -28,12 +29,15 @@ export interface UseConfirmResult {
   conflicts: any[]
   hasConflict: boolean
   canConfirm: boolean
+  conflictOptimization: any
+  isOptimizing: boolean
 
   // 操作
   confirmBatchAdd: () => Promise<void>
   confirmBatchDelete: () => Promise<void>
   confirmModify: () => Promise<void>
   confirmTripPlan: () => Promise<void>
+  optimizeConflicts: () => Promise<void>
   cancelConfirm: () => void
 }
 
@@ -54,11 +58,15 @@ export function useConfirm(options: UseConfirmOptions = {}): UseConfirmResult {
     conflicts,
     hasConflict,
     canConfirm,
+    conflictOptimization,
+    isOptimizing,
     hide: hideConfirmModal,
     clearPendingTasks,
     clearPendingDeleteTasks,
     clearAll,
     setConflicts,
+    setConflictOptimization,
+    setOptimizing,
   } = useConfirmStore()
   
   const {
@@ -298,7 +306,43 @@ export function useConfirm(options: UseConfirmOptions = {}): UseConfirmResult {
       setLoading(false)
     }
   }, [pendingTasks, onScrollToBottom, setLoading, addMessage, hideConfirmModal, clearAll])
-  
+
+  // 优化冲突
+  const optimizeConflicts = useCallback(async () => {
+    if (conflicts.length === 0) return
+
+    try {
+      setOptimizing(true)
+      console.log('[useConfirm] 请求冲突优化方案')
+
+      const result = await Network.request({
+        url: '/api/agent/optimize-conflicts',
+        method: 'POST',
+        data: {
+          conflicts: conflicts.map(c => ({
+            newTask: c.newTask,
+            existingTask: c.existingTask,
+            overlapMinutes: c.overlapMinutes,
+          })),
+          userId: 'default-user', // TODO: 从 store 获取真实 userId
+        },
+      })
+
+      console.log('[useConfirm] 冲突优化结果:', result)
+
+      if (result.data?.data?.success) {
+        setConflictOptimization(result.data.data.data)
+      } else {
+        Taro.showToast({ title: '优化失败', icon: 'error' })
+      }
+    } catch (error) {
+      console.error('[useConfirm] 冲突优化失败:', error)
+      Taro.showToast({ title: '优化失败', icon: 'error' })
+    } finally {
+      setOptimizing(false)
+    }
+  }, [conflicts, setConflictOptimization, setOptimizing])
+
   // 取消确认
   const cancelConfirm = useCallback(() => {
     console.log('[useConfirm] 用户取消操作')
@@ -341,10 +385,13 @@ export function useConfirm(options: UseConfirmOptions = {}): UseConfirmResult {
     conflicts,
     hasConflict,
     canConfirm,
+    conflictOptimization,
+    isOptimizing,
     confirmBatchAdd,
     confirmBatchDelete,
     confirmModify,
     confirmTripPlan,
+    optimizeConflicts,
     cancelConfirm,
   }
 }

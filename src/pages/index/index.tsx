@@ -60,10 +60,13 @@ const Index: FC = () => {
     reasoning,
     conflicts,
     canConfirm,
+    conflictOptimization,
+    isOptimizing,
     confirmBatchAdd,
     confirmBatchDelete,
     confirmModify,
     confirmTripPlan,
+    optimizeConflicts,
     cancelConfirm,
   } = useConfirm({
     onScrollToBottom: scrollToBottom,
@@ -127,6 +130,9 @@ const Index: FC = () => {
         reasoning={reasoning}
         conflicts={conflicts}
         canConfirm={canConfirm}
+        conflictOptimization={conflictOptimization}
+        isOptimizing={isOptimizing}
+        onOptimize={optimizeConflicts}
         onConfirmBatchAdd={confirmBatchAdd}
         onConfirmBatchDelete={confirmBatchDelete}
         onConfirmModify={confirmModify}

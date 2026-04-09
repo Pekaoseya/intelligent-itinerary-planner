@@ -521,6 +521,27 @@ export const TOOLS: Record<string, ToolDefinition> = {
       return null
     },
   },
+
+  conflict_optimizer: {
+    name: 'conflict_optimizer',
+    description: '优化时间冲突。当检测到任务时间冲突时，分析冲突并生成优化方案。',
+    parameters: {
+      type: 'object',
+      properties: {
+        conflicts: { type: 'array', description: '冲突列表' },
+      },
+      required: ['conflicts'],
+    },
+    examples: [
+      { conflicts: [{ newTask: { title: '会议A' }, existingTask: { title: '会议B' }, overlapMinutes: 30 }] },
+    ],
+    customValidate: (args) => {
+      if (!args.conflicts || !Array.isArray(args.conflicts) || args.conflicts.length === 0) {
+        return '请提供冲突列表'
+      }
+      return null
+    },
+  },
 }
 
 // =============================================

@@ -12,7 +12,7 @@
 import Taro from '@tarojs/taro'
 import { View, Text, ScrollView } from '@tarojs/components'
 import { type FC, useMemo } from 'react'
-import { Plus, Trash2, X, Car, TrainFront, Plane, Users, Utensils, Building2, Check, Pencil, MapPin, Clock, Route, Sparkles, TriangleAlert } from 'lucide-react-taro'
+import { Plus, Trash2, X, Car, TrainFront, Plane, Users, Utensils, Building2, Check, Pencil, MapPin, Clock, Route, Sparkles, TriangleAlert, Lightbulb, Loader, CircleCheck } from 'lucide-react-taro'
 import { Button } from '@/components/ui/button'
 import type { ConfirmModalProps, PendingTask, RouteInfo } from './types'
 
@@ -206,6 +206,121 @@ const ConflictSection: FC<{ conflicts: any[] }> = ({ conflicts }) => {
   )
 }
 
+// 冲突优化方案
+const OptimizationSection: FC<{
+  optimization: any
+  isOptimizing: boolean
+  onOptimize: () => void
+}> = ({ optimization, isOptimizing, onOptimize }) => {
+  if (!optimization && !isOptimizing) return null
+
+  return (
+    <View
+      className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-4"
+      style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden' }}
+    >
+      <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+        <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
+          <Lightbulb size={16} color="#9333ea" />
+          <Text className="text-sm font-medium text-purple-600">AI 优化方案</Text>
+        </View>
+        {!optimization && (
+          <Button size="sm" style={{ padding: '4px 8px', height: 'auto' }} onClick={onOptimize} disabled={isOptimizing}>
+            {isOptimizing ? (
+              <>
+                <Loader size={12} color="#9333ea" className="animate-spin" />
+                <Text className="text-xs text-purple-600 ml-1">生成中...</Text>
+              </>
+            ) : (
+              <Text className="text-xs text-purple-600">生成方案</Text>
+            )}
+          </Button>
+        )}
+      </View>
+
+      {isOptimizing && (
+        <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', padding: '12px 0' }}>
+          <Loader size={16} color="#9333ea" className="animate-spin" />
+          <Text className="text-xs text-gray-600">正在分析冲突并生成优化方案...</Text>
+        </View>
+      )}
+
+      {optimization && (
+        <>
+          {/* 冲突分析 */}
+          <View className="bg-white rounded p-2 mb-2" style={{ border: '1px solid #e9d5ff' }}>
+            <Text className="text-xs font-medium text-purple-700 mb-1" style={{ display: 'block' }}>冲突分析</Text>
+            <Text className="text-xs text-gray-600" style={{ display: 'block', wordBreak: 'break-word' }}>
+              {optimization.conflictAnalysis}
+            </Text>
+          </View>
+
+          {/* 优化建议 */}
+          {optimization.optimizationSuggestions && optimization.optimizationSuggestions.length > 0 && (
+            <View className="mb-2">
+              <Text className="text-xs font-medium text-purple-700 mb-1" style={{ display: 'block' }}>优化建议</Text>
+              {optimization.optimizationSuggestions.map((suggestion: any, index: number) => (
+                <View key={index} className="bg-white rounded p-2 mb-1" style={{ border: '1px solid #e9d5ff' }}>
+                  <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                    <CircleCheck size={12} color="#9333ea" />
+                    <Text className="text-xs font-medium text-purple-700">{suggestion.description}</Text>
+                  </View>
+                  {suggestion.affectedTasks && suggestion.affectedTasks.length > 0 && (
+                    <Text className="text-xs text-gray-500" style={{ display: 'block', marginLeft: '18px' }}>
+                      影响任务: {suggestion.affectedTasks.map((t: string) => `「${t}」`).join('、')}
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* AI 思考过程 */}
+          {optimization.reasoning && optimization.reasoning.length > 0 && (
+            <View className="mb-2">
+              <Text className="text-xs font-medium text-purple-700 mb-1" style={{ display: 'block' }}>思考过程</Text>
+              {optimization.reasoning.map((step: string, index: number) => (
+                <View key={index} style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: '6px', marginBottom: '2px' }}>
+                  <Text className="text-xs text-purple-400" style={{ flexShrink: 0 }}>{index + 1}.</Text>
+                  <Text className="text-xs text-gray-600" style={{ flex: 1, wordBreak: 'break-word' }}>{step}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* 会被修改的日程 */}
+          {optimization.modifiedTasks && optimization.modifiedTasks.length > 0 && (
+            <View>
+              <Text className="text-xs font-medium text-purple-700 mb-1" style={{ display: 'block' }}>会被修改的日程</Text>
+              {optimization.modifiedTasks.map((task: any, index: number) => (
+                <View key={index} className="bg-white rounded p-2 mb-1" style={{ border: '1px solid #e9d5ff' }}>
+                  <Text className="text-xs font-medium text-gray-900 mb-1" style={{ display: 'block' }}>
+                    {task.title}
+                  </Text>
+                  {task.originalTitle && (
+                    <Text className="text-xs text-gray-500 mb-1" style={{ display: 'block' }}>
+                      原标题: {task.originalTitle}
+                    </Text>
+                  )}
+                  <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '4px' }}>
+                    <Clock size={10} color="#999" />
+                    <Text className="text-xs text-gray-600">{formatTime(task.scheduled_time)}</Text>
+                  </View>
+                  {task.description && (
+                    <Text className="text-xs text-gray-500 mt-1" style={{ display: 'block', wordBreak: 'break-word' }}>
+                      {task.description}
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+        </>
+      )}
+    </View>
+  )
+}
+
 // 行程规划确认
 const TripPlanConfirm: FC<{
   tasks: PendingTask[]
@@ -214,9 +329,12 @@ const TripPlanConfirm: FC<{
   reasoning: string[]
   conflicts: any[]
   canConfirm: boolean
+  conflictOptimization: any
+  isOptimizing: boolean
+  onOptimize: () => void
   onConfirm: () => void
   onCancel: () => void
-}> = ({ tasks, routes, summary, reasoning, conflicts, canConfirm, onConfirm, onCancel }) => {
+}> = ({ tasks, routes, summary, reasoning, conflicts, canConfirm, conflictOptimization, isOptimizing, onOptimize, onConfirm, onCancel }) => {
   const route = routes[0] // 使用第一个推荐方案
 
   // 计算可用高度
@@ -326,6 +444,13 @@ const TripPlanConfirm: FC<{
       >
         {/* 冲突提示 */}
         <ConflictSection conflicts={conflicts} />
+
+        {/* 优化方案 */}
+        <OptimizationSection
+          optimization={conflictOptimization}
+          isOptimizing={isOptimizing}
+          onOptimize={onOptimize}
+        />
 
         {/* 思考过程 */}
         <ReasoningSection reasoning={reasoning} />
@@ -735,6 +860,9 @@ export const ConfirmModal: FC<ConfirmModalProps> = ({
   reasoning,
   conflicts = [],
   canConfirm = true,
+  conflictOptimization,
+  isOptimizing,
+  onOptimize,
   onConfirmBatchAdd,
   onConfirmBatchDelete,
   onConfirmModify,
@@ -753,7 +881,10 @@ export const ConfirmModal: FC<ConfirmModalProps> = ({
             summary={summary || ''}
             reasoning={reasoning || []}
             conflicts={conflicts}
-            canConfirm={canConfirm}
+            canConfirm={canConfirm ?? true}
+            conflictOptimization={conflictOptimization ?? undefined}
+            isOptimizing={isOptimizing ?? false}
+            onOptimize={onOptimize || (() => {})}
             onConfirm={onConfirmTripPlan || (() => {})}
             onCancel={onCancel}
           />

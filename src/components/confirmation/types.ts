@@ -64,6 +64,10 @@ export interface ConfirmModalProps {
   // 冲突检测
   conflicts?: any[]
   canConfirm?: boolean
+  // 冲突优化
+  conflictOptimization?: any
+  isOptimizing?: boolean
+  onOptimize?: () => void
   // 回调
   onConfirmBatchAdd?: () => void
   onConfirmBatchDelete?: () => void

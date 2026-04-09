@@ -1,5 +1,6 @@
 import { Controller, Post, Body, Res } from '@nestjs/common'
 import { AgentService, AgentResponse } from './agent.service'
+import { ConflictOptimizer } from './tools/conflict-optimizer'
 
 interface UserLocation {
   latitude: number
@@ -9,7 +10,10 @@ interface UserLocation {
 
 @Controller('agent')
 export class AgentController {
-  constructor(private readonly agentService: AgentService) {}
+  constructor(
+    private readonly agentService: AgentService,
+    private readonly conflictOptimizer: ConflictOptimizer
+  ) {}
 
   @Post('chat')
   async chat(
@@ -64,6 +68,27 @@ export class AgentController {
       console.error('[AgentController] 流式处理错误:', error)
       res.write(`data: ${JSON.stringify({ type: 'error', data: { message: error.message } })}\n\n`)
       res.end()
+    }
+  }
+
+  /**
+   * 冲突优化接口
+   * 当检测到时间冲突时，AI 分析冲突并生成优化方案
+   */
+  @Post('optimize-conflicts')
+  async optimizeConflicts(
+    @Body() body: { conflicts: any[]; userId?: string }
+  ): Promise<{ code: number; msg: string; data: any }> {
+    console.log('[AgentController] 收到冲突优化请求:', body.conflicts.length, '个冲突')
+
+    const { conflicts, userId = 'default-user' } = body
+
+    const result = await this.conflictOptimizer.optimizeConflicts(conflicts, userId)
+
+    return {
+      code: 200,
+      msg: 'success',
+      data: result,
     }
   }
 }

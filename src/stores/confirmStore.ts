@@ -58,6 +58,10 @@ interface ConfirmState {
   conflicts: any[]  // { task, newTask, overlapMinutes }
   hasConflict: boolean
   canConfirm: boolean
+
+  // 冲突优化方案
+  conflictOptimization: any  // { conflictAnalysis, optimizationSuggestions, reasoning, modifiedTasks }
+  isOptimizing: boolean
   
   // Actions
   showBatchAdd: (tasks: any[]) => void
@@ -65,6 +69,8 @@ interface ConfirmState {
   showModify: (original: any, updated: any) => void
   showTripPlan: (tasks: any[], routes: RouteInfo[], summary: string, reasoning?: string[]) => void
   setConflicts: (conflicts: any[], canConfirm: boolean) => void
+  setConflictOptimization: (optimization: any) => void
+  setOptimizing: (isOptimizing: boolean) => void
   hide: () => void
   reset: () => void
   clearPendingTasks: () => void
@@ -87,6 +93,8 @@ const initialState = {
   conflicts: [],
   hasConflict: false,
   canConfirm: true,
+  conflictOptimization: null,
+  isOptimizing: false,
 }
 
 export const useConfirmStore = create<ConfirmState>((set) => ({
@@ -155,6 +163,8 @@ export const useConfirmStore = create<ConfirmState>((set) => ({
     conflicts: [],
     hasConflict: false,
     canConfirm: true, // 初始值为 true，稍后通过 setConflicts 更新
+    conflictOptimization: null,
+    isOptimizing: false,
   }),
 
   setConflicts: (conflicts, canConfirm) => set({
@@ -162,7 +172,16 @@ export const useConfirmStore = create<ConfirmState>((set) => ({
     hasConflict: conflicts.length > 0,
     canConfirm,
   }),
-  
+
+  setConflictOptimization: (optimization) => set({
+    conflictOptimization: optimization,
+    isOptimizing: false,
+  }),
+
+  setOptimizing: (isOptimizing) => set({
+    isOptimizing,
+  }),
+
   hide: () => set({ visible: false }),
   
   clearPendingTasks: () => set({ pendingTasks: [] }),
