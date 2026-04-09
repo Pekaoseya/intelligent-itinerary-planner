@@ -48,15 +48,15 @@
 
 ```mermaid
 graph TD
-    A[Agent Module<br/>AI 核心模块] --> B[UserContext Module<br/>用户上下文]
-    A --> C[Task Module<br/>任务管理]
-    A --> D[Location Module<br/>位置服务]
-    A --> E[Map Module<br/>地图服务]
+    A[Agent Module AI 核心模块] --> B[UserContext Module 用户上下文]
+    A --> C[Task Module 任务管理]
+    A --> D[Location Module 位置服务]
+    A --> E[Map Module 地图服务]
 
-    A --> F[Recommendation Module<br/>推荐服务]
-    A --> G[Stats Module<br/>统计服务]
+    A --> F[Recommendation Module 推荐服务]
+    A --> G[Stats Module 统计服务]
 
-    C --> H[Supabase<br/>数据库]
+    C --> H[Supabase 数据库]
     F --> H
     G --> H
     B --> H
@@ -423,10 +423,10 @@ erDiagram
 
 ```mermaid
 flowchart TD
-    Start[用户发送消息] --> LoadHistory[加载历史对话<br/>最近 10 条]
-    LoadHistory --> LoadContext[获取用户上下文<br/>用户画像+统计数据]
-    LoadContext --> BuildPrompt[构建系统提示词<br/>时间+位置+用户画像]
-    BuildPrompt --> CallLLM[调用大语言模型<br/>流式响应]
+    Start[用户发送消息] --> LoadHistory[加载历史对话 最近 10 条]
+    LoadHistory --> LoadContext[获取用户上下文 用户画像+统计数据]
+    LoadContext --> BuildPrompt[构建系统提示词 时间+位置+用户画像]
+    BuildPrompt --> CallLLM[调用大语言模型 流式响应]
 
     CallLLM --> ParseResponse{解析 AI 响应}
     ParseResponse --> HasToolCalls{有工具调用?}
@@ -436,7 +436,7 @@ flowchart TD
 
     ValidateParams --> ValidationOK{校验通过?}
     ValidationOK -->|是| ExecuteTool[执行工具]
-    ValidationOK -->|否| SmartRetry[智能重试<br/>传递完整历史消息]
+    ValidationOK -->|否| SmartRetry[智能重试 传递完整历史消息]
 
     ExecuteTool --> ToolSuccess{执行成功?}
     ToolSuccess -->|是| GenerateReply[生成友好回复]
@@ -460,23 +460,23 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start[用户: "明天下午2点开会"] --> AIUnderstand[AI 理解意图]
+    Start["用户: '明天下午2点开会'] --> AIUnderstand[AI 理解意图]
     AIUnderstand --> CheckMissing{信息完整?}
 
     CheckMissing -->|否| AskUser[询问用户]
-    CheckMissing -->|是| CallTool[调用 task_create<br/>confirm=false]
+    CheckMissing -->|是| CallTool[调用 task_create confirm=false]
 
     AskUser --> UserReply[用户回复]
     UserReply --> AIUnderstand
 
-    CallTool --> SaveTask[保存任务<br/>status=pending]
+    CallTool --> SaveTask[保存任务 status=pending]
     SaveTask --> SaveEvent[记录任务事件]
     SaveEvent --> ReturnPreview[返回预览信息]
 
     ReturnPreview --> FrontendDisplay[前端显示确认弹窗]
     FrontendDisplay --> UserConfirm{用户确认?}
 
-    UserConfirm -->|确定| CallConfirm[调用 task_create<br/>confirm=true]
+    UserConfirm -->|确定| CallConfirm[调用 task_create confirm=true]
     UserConfirm -->|取消| DeletePending[删除 pending 任务]
 
     CallConfirm --> UpdateStatus[更新 status=confirmed]
@@ -507,11 +507,11 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start[用户: "下周去上海出差"] --> AIAnalyze[AI 分析需求]
+    Start["用户: '下周去上海出差'] --> AIAnalyze[AI 分析需求]
     AIAnalyze --> CheckHistory[查询历史行程]
     CheckHistory --> GetLocation[获取当前位置]
 
-    GetLocation --> CallAmap[调用高德 API<br/>规划路线]
+    GetLocation --> CallAmap[调用高德 API 规划路线]
     CallAmap --> ParseRoutes[解析路线方案]
 
     ParseRoutes --> SplitTrips[拆分为多段行程]
@@ -552,7 +552,7 @@ flowchart TD
     ShowError --> ShowParams[展示错误参数]
     ShowParams --> ShowCorrect[展示正确参数格式]
 
-    ShowCorrect --> CallLLM[重新调用 LLM<br/>temperature=0.1]
+    ShowCorrect --> CallLLM[重新调用 LLM temperature=0.1]
     CallLLM --> ParseRetry{解析重试响应}
 
     ParseRetry --> HasNewCall{有新工具调用?}
@@ -583,10 +583,10 @@ flowchart TD
     Start[用户操作] --> CollectData[收集行为数据]
     CollectData --> AnalyzeStats[统计分析]
 
-    AnalyzeStats --> TaskStats[任务统计<br/>类型/时间/地点]
-    AnalyzeStats --> LocationStats[位置统计<br/>常去地点]
-    AnalyzeStats --> TimeStats[时间统计<br/>活跃时段]
-    AnalyzeStats --> PreferenceStats[偏好统计<br/>出行方式]
+    AnalyzeStats --> TaskStats[任务统计 类型/时间/地点]
+    AnalyzeStats --> LocationStats[位置统计 常去地点]
+    AnalyzeStats --> TimeStats[时间统计 活跃时段]
+    AnalyzeStats --> PreferenceStats[偏好统计 出行方式]
 
     TaskStats --> GenerateTags[生成标签]
     LocationStats --> GenerateTags
@@ -1111,7 +1111,7 @@ graph TB
     end
 
     subgraph 后端服务
-        H[NestJS Server<br/>端口 3000]
+        H[NestJS Server 端口 3000]
     end
 
     subgraph 数据层
@@ -1156,7 +1156,7 @@ graph TB
 ```mermaid
 flowchart TD
     Start[代码提交] --> GitPush[推送到 Git]
-    GitPush --> CI[持续集成<br/>pnpm validate + build]
+    GitPush --> CI[持续集成 pnpm validate + build]
     CI --> DockerBuild[构建 Docker 镜像]
     DockerBuild --> Registry[推送到镜像仓库]
 
