@@ -69,16 +69,16 @@ export const TOOLS: Record<string, ToolDefinition> = {
     parameters: {
       type: 'object',
       properties: {
-        title: { type: 'string', description: '任务标题' },
+        title: { type: 'string', description: '任务标题（必填）' },
         type: {
           type: 'string',
           enum: [...VALID_TASK_TYPES],
-          description: '任务类型'
+          description: '任务类型（必填，必须使用英文）：taxi=打车、train=火车、flight=飞机、meeting=会议、dining=餐饮、hotel=酒店、todo=事务、other=其他'
         },
-        scheduled_time: { type: 'string', description: '计划时间（ISO格式）' },
-        end_time: { type: 'string', description: '结束时间（可选）' },
-        location_name: { type: 'string', description: '地点名称。如果用户没有明确指定，使用"当前位置附近"' },
-        destination_name: { type: 'string', description: '目的地名称（出行类任务必需）' },
+        scheduled_time: { type: 'string', description: '计划时间（必填，ISO格式，例如：2025-01-15T14:00:00+08:00）' },
+        end_time: { type: 'string', description: '结束时间（可选，ISO格式，例如：2025-01-15T15:00:00+08:00）' },
+        location_name: { type: 'string', description: '地点名称（如果用户没有明确指定，使用"当前位置附近"）' },
+        destination_name: { type: 'string', description: '目的地名称（出行类任务必需，例如：机场、酒店）' },
       },
       required: [],
     },
