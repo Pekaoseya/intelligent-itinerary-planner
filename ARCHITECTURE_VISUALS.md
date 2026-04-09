@@ -253,8 +253,8 @@ flowchart TD
     HasConflict -->|否| Complete[完成创建]
 
     CallOptimizer --> ShowOptions[显示优化方案]
-    ShowOptions --> UserSelect[用户选择]
-    UserSelect --> ApplySolution[应用优化方案]
+    ShowOptions --> UserSelectOpt[用户选择优化方案]
+    UserSelectOpt --> ApplySolution[应用优化方案]
     ApplySolution --> Complete
 
     DeletePending --> Cancel[取消创建]
@@ -289,10 +289,10 @@ flowchart TD
     HasConflict -->|否| ShowRoutes[展示路线方案]
 
     Optimize --> ShowRoutes
-    ShowRoutes --> UserSelect{用户选择?}
+    ShowRoutes --> UserSelectRoute{用户选择?}
 
-    UserSelect -->|选择路线| CreateTasks[批量创建任务]
-    UserSelect -->|自定义| CustomRoute[自定义路线]
+    UserSelectRoute -->|选择路线| CreateTasks[批量创建任务]
+    UserSelectRoute -->|自定义| CustomRoute[自定义路线]
 
     CustomRoute --> CallAmap
     CreateTasks --> SaveTasks[保存到数据库]
