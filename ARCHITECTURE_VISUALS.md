@@ -225,7 +225,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start["用户: '明天下午2点开会'] --> AIUnderstand[AI 理解意图]
+    Start["用户: '明天下午2点开会'"] --> AIUnderstand[AI 理解意图]
     AIUnderstand --> CheckMissing{信息完整?}
 
     CheckMissing -->|否| AskUser[询问用户]
@@ -272,7 +272,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start["用户: '下周去上海出差'] --> AIAnalyze[AI 分析需求]
+    Start["用户: '下周去上海出差'"] --> AIAnalyze[AI 分析需求]
     AIAnalyze --> CheckHistory[查询历史行程]
     CheckHistory --> GetLocation[获取当前位置]
 
