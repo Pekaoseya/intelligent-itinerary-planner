@@ -3,6 +3,11 @@
   "projectname": "coze-mini-program",
   "description": "test",
   "appid": "touristappid",
+  "permission": {
+    "scope.userLocation": {
+      "desc": "您的位置信息将用于获取周边服务和规划行程"
+    }
+  },
   "setting": {
     "urlCheck": true,
     "es6": false,
@@ -11,5 +16,13 @@
     "postcss": false,
     "minified": false
   },
-  "compileType": "miniprogram"
+  "compileType": "miniprogram",
+  "packOptions": {
+    "ignore": [
+      {
+        "type": "folder",
+        "value": "./assets"
+      }
+    ]
+  }
 }
