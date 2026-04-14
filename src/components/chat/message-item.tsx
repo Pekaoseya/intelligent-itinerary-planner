@@ -20,7 +20,22 @@ const cleanJsonFromContent = (content: string): string => {
   if (cleaned.startsWith('{') && cleaned.endsWith('}')) {
     try {
       const parsed = JSON.parse(cleaned)
-      if (parsed.content) return parsed.content
+      if (parsed.content) {
+        // 如果 content 本身又是 JSON 字符串，递归提取
+        const nestedContent = String(parsed.content)
+        if (nestedContent.startsWith('{') && nestedContent.endsWith('}')) {
+          try {
+            const nestedParsed = JSON.parse(nestedContent)
+            if (nestedParsed.content) {
+              return String(nestedParsed.content)
+            }
+          } catch {
+            // 嵌套解析失败，直接返回 nestedContent
+            return nestedContent
+          }
+        }
+        return String(parsed.content)
+      }
     } catch {
       // 解析失败，返回原内容
     }

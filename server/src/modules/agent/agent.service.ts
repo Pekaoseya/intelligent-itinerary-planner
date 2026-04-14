@@ -567,25 +567,38 @@ ${toolResultsSummary}
    */
   private cleanJsonFromContent(content: string): string {
     if (!content) return ''
-    
+
     // 移除 ```json ... ``` 代码块
     let cleaned = content.replace(/```json\s*[\s\S]*?```/g, '').trim()
-    
+
     // 移除单独的 ``` ... ``` 代码块
     cleaned = cleaned.replace(/```\s*[\s\S]*?```/g, '').trim()
-    
+
     // 如果内容只剩下 JSON 对象，尝试提取 content 字段
     if (cleaned.startsWith('{') && cleaned.endsWith('}')) {
       try {
         const parsed = JSON.parse(cleaned)
         if (parsed.content) {
-          return parsed.content
+          // 如果 content 本身又是 JSON 字符串，递归提取
+          const nestedContent = String(parsed.content)
+          if (nestedContent.startsWith('{') && nestedContent.endsWith('}')) {
+            try {
+              const nestedParsed = JSON.parse(nestedContent)
+              if (nestedParsed.content) {
+                return String(nestedParsed.content)
+              }
+            } catch {
+              // 嵌套解析失败，直接返回 nestedContent
+              return nestedContent
+            }
+          }
+          return String(parsed.content)
         }
       } catch {
         // 解析失败，返回原内容
       }
     }
-    
+
     return cleaned || content
   }
 

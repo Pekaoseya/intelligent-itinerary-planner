@@ -1,0 +1,39 @@
+{
+  "id": "1776133036472-default-",
+  "type": "bug",
+  "userId": "default-user",
+  "description": "不该显示JSON",
+  "messages": [
+    {
+      "id": "welcome",
+      "role": "assistant",
+      "content": "您好！我是您的智能助手。\n\n我可以帮您管理任务：打车、火车、飞机、会议、餐饮、酒店、事务等。\n\n直接告诉我您想做什么，我会理解您的需求。",
+      "timestamp": "2026-04-14T02:16:09.150Z"
+    },
+    {
+      "id": "1776132984029",
+      "role": "user",
+      "content": "帮我安排上海的行程",
+      "timestamp": "2026-04-14T02:16:24.029Z"
+    },
+    {
+      "id": "1776132984031",
+      "role": "assistant",
+      "content": "{\"reasoning\": \"用户明确表达了出行需求，需要规划从当前位置到上海的出差行程，根据规则应直接调用trip_plan工具。用户当前位置是杭州西溪街道创业大厦，出发时间是明天（2026-04-15），目的地是上海，目的是出差。\", \"tool_calls\": [{\"name\": \"trip_plan\", \"parameters\": {\"departure_location\": {\"location_name\": \"浙江省杭州市西湖区西溪街道创业大厦(文三路)\", \"coordinates\": {\"latitude\": 30.2765, \"longitude\": 120.1382}}, \"destination_location\": {\"location_name\": \"上海\"}, \"departure_time\": \"2026-04-15T00:00:00+08:00\", \"trip_purpose\": \"business\", \"user_preferences\": {\"preferred_time\": \"afternoon\", \"frequent_locations\": [\"杭州东站\", \"西湖餐厅\", \"会议室A\"]}}], \"content\": \"好的，我正在为您规划明天从杭州出发到上海的出差行程。我会考虑您偏好下午出行的习惯，优先推荐下午的高铁班次。您需要我为您提供：1. 推荐的高铁班次及时间2. 上海的酒店建议（靠近商务区）3. 必要的会议安排建议您希望我重点规划哪部分内容？\"}",
+      "reasoning": [
+        "正在理解您的需求..."
+      ],
+      "tool_results": [],
+      "timestamp": "2026-04-14T02:16:24.030Z"
+    }
+  ],
+  "userInfo": {
+    "location": {
+      "latitude": 30.27654324001736,
+      "longitude": 120.13816569010417,
+      "name": "浙江省杭州市西湖区西溪街道创业大厦(文三路)"
+    },
+    "timestamp": "2026-04-14T02:17:15.838Z"
+  },
+  "timestamp": "2026-04-14T02:17:16.472Z"
+}
