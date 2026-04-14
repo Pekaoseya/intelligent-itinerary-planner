@@ -8,6 +8,7 @@ import { TaskModule } from './modules/task/task.module'
 import { RecommendationModule } from './modules/recommendation/recommendation.module'
 import { MapModule } from './modules/map/map.module'
 import { StatsModule } from './modules/stats/stats.module'
+import { FeedbackModule } from './modules/feedback/feedback.module'
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { StatsModule } from './modules/stats/stats.module'
     RecommendationModule,
     MapModule,
     StatsModule,
+    FeedbackModule,
   ],
   controllers: [AppController],
   providers: [AppService],

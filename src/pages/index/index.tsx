@@ -1,8 +1,9 @@
 import { View } from '@tarojs/components'
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { FC } from 'react'
 import { ConfirmModal } from '@/components/confirmation'
 import { LocationBar, ChatInput, MessageList } from '@/components/chat'
+import { FeedbackModal, FeedbackButton } from '@/components/feedback'
 import { useLocation, useAI, useConfirm } from '@/hooks'
 import { useChatStore } from '@/stores/chatStore'
 import './index.css'
@@ -76,7 +77,10 @@ const Index: FC = () => {
   useEffect(() => {
     fetchLocation()
   }, [fetchLocation])
-  
+
+  // ========== 反馈功能 ==========
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false)
+
   // ========== 发送消息 ==========
   const handleSend = useCallback(() => {
     sendMessage(inputText)
@@ -91,15 +95,20 @@ const Index: FC = () => {
       className="flex flex-col overflow-hidden bg-gray-50 safe-container"
       style={{ width: '100%', height: '100%', backgroundColor: '#f5f5f5', boxSizing: 'border-box', overflow: 'hidden' }}
     >
-      {/* 定位栏 */}
-      <LocationBar
-        location={userLocation}
-        loading={locationLoading}
-        error={locationError}
-        showDetail={showLocationDetail}
-        onRefresh={fetchLocation}
-        onShowDetail={setShowLocationDetail}
-      />
+      {/* 定位栏 + 反馈按钮 */}
+      <View className="flex items-center gap-2 px-4 py-3 bg-white border-b border-gray-200">
+        <View className="flex-1">
+          <LocationBar
+            location={userLocation}
+            loading={locationLoading}
+            error={locationError}
+            showDetail={showLocationDetail}
+            onRefresh={fetchLocation}
+            onShowDetail={setShowLocationDetail}
+          />
+        </View>
+        <FeedbackButton onClick={() => setShowFeedbackModal(true)} />
+      </View>
 
       {/* 消息列表 */}
       <MessageList
@@ -138,6 +147,14 @@ const Index: FC = () => {
         onConfirmModify={confirmModify}
         onConfirmTripPlan={confirmTripPlan}
         onCancel={cancelConfirm}
+      />
+
+      {/* 反馈弹窗 */}
+      <FeedbackModal
+        visible={showFeedbackModal}
+        messages={messages}
+        userInfo={userLocation}
+        onClose={() => setShowFeedbackModal(false)}
       />
     </View>
   )
