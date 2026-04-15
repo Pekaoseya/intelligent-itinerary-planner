@@ -1,26 +1,67 @@
 /**
- * 任务数据访问层
- * 隔离数据库操作，提供统一的数据访问接口
+ * 任务仓储层
+ * 负责与数据库交互
  */
 
-import { Injectable } from '@nestjs/common'
-import { getSupabaseClient } from '../../storage/database/supabase-client'
+import { Injectable, Logger } from '@nestjs/common'
+import { SupabaseClient } from '@supabase/supabase-js'
+import { SupabaseService } from '../../services/supabase.service'
 import type { Task, TaskType, TaskStatus } from '../../common/types'
+
+/**
+ * 转换任务数据的经纬度字段类型（DECIMAL string → number）
+ */
+function transformTaskData(task: any): Task {
+  if (!task) return task
+
+  return {
+    ...task,
+    // 将 DECIMAL string 转换为 number
+    latitude: task.latitude !== null && task.latitude !== undefined
+      ? parseFloat(String(task.latitude))
+      : undefined,
+    longitude: task.longitude !== null && task.longitude !== undefined
+      ? parseFloat(String(task.longitude))
+      : undefined,
+    dest_latitude: task.dest_latitude !== null && task.dest_latitude !== undefined
+      ? parseFloat(String(task.dest_latitude))
+      : undefined,
+    dest_longitude: task.dest_longitude !== null && task.dest_longitude !== undefined
+      ? parseFloat(String(task.dest_longitude))
+      : undefined,
+  }
+}
+
+/**
+ * 转换任务列表的经纬度字段类型
+ */
+function transformTaskList(tasks: any[]): Task[] {
+  if (!tasks) return []
+  return tasks.map(transformTaskData)
+}
 
 @Injectable()
 export class TaskRepository {
-  private supabase = getSupabaseClient()
+  private readonly logger = new Logger(TaskRepository.name)
+  private supabase: SupabaseClient
+
+  constructor(private readonly supabaseService: SupabaseService) {
+    this.supabase = this.supabaseService.getClient()
+  }
 
   /**
-   * 查询所有任务
+   * 查找所有任务
    */
-  async findAll(userId: string, filters?: {
-    status?: TaskStatus
-    type?: TaskType
-    date?: string
-    startDate?: string
-    endDate?: string
-  }): Promise<Task[]> {
+  async findAll(
+    userId: string,
+    filters?: {
+      status?: TaskStatus
+      type?: TaskType
+      date?: string
+      startDate?: string
+      endDate?: string
+    },
+  ): Promise<Task[]> {
     let query = this.supabase
       .from('tasks')
       .select('*')
@@ -30,31 +71,39 @@ export class TaskRepository {
     if (filters?.status) {
       query = query.eq('status', filters.status)
     }
+
     if (filters?.type) {
       query = query.eq('type', filters.type)
     }
+
     if (filters?.date) {
-      const start = new Date(filters.date)
-      start.setHours(0, 0, 0, 0)
-      const end = new Date(filters.date)
-      end.setHours(23, 59, 59, 999)
-      query = query.gte('scheduled_time', start.toISOString())
-      query = query.lte('scheduled_time', end.toISOString())
+      const startOfDay = new Date(filters.date)
+      startOfDay.setHours(0, 0, 0, 0)
+      const endOfDay = new Date(filters.date)
+      endOfDay.setHours(23, 59, 59, 999)
+      query = query.gte('scheduled_time', startOfDay.toISOString()).lte('scheduled_time', endOfDay.toISOString())
     }
+
     if (filters?.startDate) {
-      query = query.gte('scheduled_time', filters.startDate)
+      query = query.gte('scheduled_time', new Date(filters.startDate).toISOString())
     }
+
     if (filters?.endDate) {
-      query = query.lte('scheduled_time', filters.endDate)
+      query = query.lte('scheduled_time', new Date(filters.endDate).toISOString())
     }
 
     const { data, error } = await query
-    if (error) throw error
-    return data || []
+
+    if (error) {
+      this.logger.error(`查询任务失败: ${error.message}`, error)
+      return []
+    }
+
+    return transformTaskList(data || [])
   }
 
   /**
-   * 根据 ID 查询任务
+   * 根据ID查找任务
    */
   async findById(id: string, userId?: string): Promise<Task | null> {
     let query = this.supabase.from('tasks').select('*').eq('id', id)
@@ -63,31 +112,49 @@ export class TaskRepository {
     }
     const { data, error } = await query.single()
     if (error) return null
-    return data
+    return transformTaskData(data)
   }
 
   /**
    * 创建任务
    */
   async create(taskData: Partial<Task>): Promise<Task> {
+    // 确保经纬度字段转换为 string（DECIMAL 类型在数据库中存储为 string）
+    const dataToInsert = {
+      ...taskData,
+      latitude: taskData.latitude !== undefined ? String(taskData.latitude) : null,
+      longitude: taskData.longitude !== undefined ? String(taskData.longitude) : null,
+      dest_latitude: taskData.dest_latitude !== undefined ? String(taskData.dest_latitude) : null,
+      dest_longitude: taskData.dest_longitude !== undefined ? String(taskData.dest_longitude) : null,
+    }
+
     const { data, error } = await this.supabase
       .from('tasks')
-      .insert(taskData)
+      .insert(dataToInsert)
       .select()
       .single()
 
     if (error) throw error
-    return data
+    return transformTaskData(data)
   }
 
   /**
    * 更新任务
    */
   async update(id: string, updates: Partial<Task>): Promise<Task> {
+    // 确保经纬度字段转换为 string
+    const updatesToApply = {
+      ...updates,
+      latitude: updates.latitude !== undefined ? String(updates.latitude) : undefined,
+      longitude: updates.longitude !== undefined ? String(updates.longitude) : undefined,
+      dest_latitude: updates.dest_latitude !== undefined ? String(updates.dest_latitude) : undefined,
+      dest_longitude: updates.dest_longitude !== undefined ? String(updates.dest_longitude) : undefined,
+    }
+
     const { data, error } = await this.supabase
       .from('tasks')
       .update({
-        ...updates,
+        ...updatesToApply,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
@@ -95,7 +162,7 @@ export class TaskRepository {
       .single()
 
     if (error) throw error
-    return data
+    return transformTaskData(data)
   }
 
   /**
@@ -148,7 +215,7 @@ export class TaskRepository {
       .limit(limit)
 
     if (error) throw error
-    return data || []
+    return transformTaskList(data || [])
   }
 
   /**
@@ -157,33 +224,63 @@ export class TaskRepository {
   async findConflicts(
     userId: string,
     scheduledTime: Date,
-    duration: number,
-    excludeTaskId?: string
+    excludeId?: string,
   ): Promise<Task[]> {
-    const dateStr = scheduledTime.toISOString().split('T')[0]
-    const startOfDay = new Date(`${dateStr}T00:00:00`).toISOString()
-    const endOfDay = new Date(`${dateStr}T23:59:59`).toISOString()
+    const startTime = new Date(scheduledTime.getTime() - 15 * 60 * 1000) // 15分钟前
+    const endTime = new Date(scheduledTime.getTime() + 15 * 60 * 1000) // 15分钟后
 
     let query = this.supabase
       .from('tasks')
       .select('*')
       .eq('user_id', userId)
-      .eq('status', 'pending')
-      .gte('scheduled_time', startOfDay)
-      .lte('scheduled_time', endOfDay)
+      .in('status', ['pending', 'confirmed'])
+      .gte('scheduled_time', startTime.toISOString())
+      .lte('scheduled_time', endTime.toISOString())
+
+    if (excludeId) {
+      query = query.neq('id', excludeId)
+    }
 
     const { data, error } = await query
-    if (error || !data) return []
 
-    const newStart = scheduledTime.getTime()
-    const newEnd = newStart + duration * 60 * 1000
+    if (error) throw error
+    return transformTaskList(data || [])
+  }
 
-    return data.filter(task => {
-      if (excludeTaskId && task.id === excludeTaskId) return false
-      const taskStart = new Date(task.scheduled_time).getTime()
-      const taskDuration = task.duration_minutes || 60
-      const taskEnd = taskStart + taskDuration * 60 * 1000
-      return newStart < taskEnd && newEnd > taskStart
-    })
+  /**
+   * 统计任务数量
+   */
+  async count(userId: string, filters?: {
+    status?: TaskStatus
+    type?: TaskType
+    date?: string
+  }): Promise<number> {
+    let query = this.supabase
+      .from('tasks')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+
+    if (filters?.status) {
+      query = query.eq('status', filters.status)
+    }
+
+    if (filters?.type) {
+      query = query.eq('type', filters.type)
+    }
+
+    if (filters?.date) {
+      const startOfDay = new Date(filters.date)
+      startOfDay.setHours(0, 0, 0, 0)
+      const endOfDay = new Date(filters.date)
+      endOfDay.setHours(23, 59, 59, 999)
+      query = query.gte('scheduled_time', startOfDay.toISOString()).lte('scheduled_time', endOfDay.toISOString())
+    }
+
+    const { count, error } = await query
+    if (error) {
+      this.logger.error(`统计任务数量失败: ${error.message}`, error)
+      return 0
+    }
+    return count || 0
   }
 }
