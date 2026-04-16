@@ -39,3 +39,7 @@ pnpm-debug.log*
 
 # Key
 # key/
+
+# Feedback data (runtime generated)
+server/feedbacks/
+
