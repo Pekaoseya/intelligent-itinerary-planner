@@ -5,7 +5,7 @@
 
 import { Injectable, Logger } from '@nestjs/common'
 import { SupabaseClient } from '@supabase/supabase-js'
-import { SupabaseService } from '../../services/supabase.service'
+import { getSupabaseClient } from '../../storage/database/supabase-client'
 import type { Task, TaskType, TaskStatus } from '../../common/types'
 
 /**
@@ -45,8 +45,8 @@ export class TaskRepository {
   private readonly logger = new Logger(TaskRepository.name)
   private supabase: SupabaseClient
 
-  constructor(private readonly supabaseService: SupabaseService) {
-    this.supabase = this.supabaseService.getClient()
+  constructor() {
+    this.supabase = getSupabaseClient()
   }
 
   /**
